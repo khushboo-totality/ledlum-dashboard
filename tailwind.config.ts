@@ -13,13 +13,14 @@ const config: Config = {
         pop: ['Poppins', 'sans-serif'],
       },
       colors: {
-        primary:   '#96865D',
-        secondary: '#DBDCDD',
-        gray:      '#F0F0F0',
-        'gray-mid':'#D8D8D8',
+        primary:    '#9a8c66',
+        secondary:  '#ece3d4',
+        'primary-dark': '#7a6e4e',
+        gray:       '#F0F0F0',
+        'gray-mid': '#D8D8D8',
         'gray-dark':'#9A9A9A',
         'gray-text':'#555555',
-        foreground:'#171717',
+        foreground: '#171717',
       },
       animation: {
         'card-in':   'cardIn 0.35s ease both',
@@ -37,7 +38,7 @@ const config: Config = {
       },
       boxShadow: {
         'card':   '0 1px 4px rgba(0,0,0,0.08)',
-        'card-hover': '0 8px 32px rgba(206,55,49,0.12)',
+        'card-hover': '0 8px 32px rgba(154,140,102,0.15)',
         'modal':  '0 20px 60px rgba(0,0,0,0.15)',
         'header': '0 1px 0 #F0F0F0',
       },

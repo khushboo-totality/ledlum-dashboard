@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Bai+Jamjuree:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
+:root {
+  /* ── Brand Colors ── */
+  --background:       #ffffff;
+  --foreground:       #171717;
+  --primary-color:    #9a8c66;
+  --secondary-color:  #ece3d4;
+  --gray-color:       #F0F0F0;
+  --black-color:      #000000;
+  --white-color:      #FFFFFF;
+
+  /* ── Fonts ── */
+  --primary-font:   'Bai Jamjuree', sans-serif;
+  --secondary-font: 'Poppins', sans-serif;
+  --font-bai: var(--primary-font);
+  --font-pop: var(--secondary-font);
+
+  /* ── Text Sizes ── */
+  --text-desk-h1:  3rem;
+  --text-desk-h2:  2.25rem;
+  --text-desk-h3:  1.5rem;
+  --text-body:     1rem;
+  --text-body-sm:  0.875rem;
+  --text-body-xs:  0.75rem;
+  --text-button:   1rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--primary-font);
+  min-height: 100vh;
+}
+
+@layer utilities {
+  .font-bai { font-family: var(--primary-font); }
+  .font-pop { font-family: var(--secondary-font); }
+}
