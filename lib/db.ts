@@ -140,6 +140,6 @@ export const db = {
   },
   getCategories(zone?: string) {
     const products = zone ? globalStore.__products!.filter(p => p.zone === zone) : globalStore.__products!
-    return [...new Set(products.map(p => p.Category))]
+    return Array.from(new Set(products.map(p => p.Category)))
   },
 }
