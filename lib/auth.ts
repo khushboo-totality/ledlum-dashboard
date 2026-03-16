@@ -1,19 +1,19 @@
 import type { Role, User, Permissions } from '@/types'
 import { vendorStore } from '@/lib/vendorStore'
 
-// Static staff users (admin, editor, viewer)
 export const STAFF_USERS: Record<string, { password: string; role: Role; name: string; initials: string; email?: string }> = {
   admin:  { password: 'admin123', role: 'admin',  name: 'Admin',  initials: 'AD', email: 'admin@ledlum.com'  },
   editor: { password: 'edit123',  role: 'editor', name: 'Editor', initials: 'ED', email: 'editor@ledlum.com' },
-  viewer: { password: 'view123',  role: 'viewer', name: 'Viewer', initials: 'VW' },
+  viewer: { password: 'view123',  role: 'viewer', name: 'Viewer', initials: 'VW', email: 'viewer@ledlum.com' },
 }
 
+// ALL roles get share + download
 export const PERMISSIONS: Record<Role, Permissions> = {
-  admin:  { create: true,  edit: true,  delete: true,  cart: false },
-  editor: { create: true,  edit: true,  delete: false, cart: false },
-  viewer: { create: false, edit: false, delete: false, cart: false },
-  guest:  { create: false, edit: false, delete: false, cart: false },
-  vendor: { create: false, edit: false, delete: false, cart: true  },
+  admin:  { create: true,  edit: true,  delete: true,  cart: false, share: true, download: true  },
+  editor: { create: true,  edit: true,  delete: false, cart: false, share: true, download: true  },
+  viewer: { create: false, edit: false, delete: false, cart: false, share: true, download: true  },
+  guest:  { create: false, edit: false, delete: false, cart: false, share: true, download: true  },
+  vendor: { create: false, edit: false, delete: false, cart: true,  share: true, download: true  },
 }
 
 export function getPermissions(role: Role): Permissions {
@@ -26,26 +26,14 @@ export const GUEST_USER: User = {
 
 export function validateLogin(username: string, password: string): User | null {
   const u = username.toLowerCase()
-
-  // Check staff first
   const staff = STAFF_USERS[u]
   if (staff && staff.password === password) {
     return { username: u, role: staff.role, name: staff.name, initials: staff.initials, email: staff.email }
   }
-
-  // Check vendors from dynamic store
   const vendor = vendorStore.getByUsername(u)
   if (vendor && vendor.password === password) {
-    return {
-      username: u,
-      role:     'vendor',
-      name:     vendor.name,
-      initials: vendor.initials,
-      email:    vendor.email,
-      company:  vendor.company,
-    }
+    return { username: u, role: 'vendor', name: vendor.name, initials: vendor.initials, email: vendor.email, company: vendor.company }
   }
-
   return null
 }
 

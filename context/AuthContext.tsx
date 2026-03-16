@@ -14,7 +14,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
-const NULL_PERMS: Permissions = { create: false, edit: false, delete: false, cart: false }
+const NULL_PERMS: Permissions = { create: false, edit: false, delete: false, cart: false, share: false, download: false }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)

@@ -6,6 +6,7 @@ const STYLES = {
   success: { dot: 'bg-green-500', bar: 'border-l-green-500' },
   error:   { dot: 'bg-primary',   bar: 'border-l-primary' },
   info:    { dot: 'bg-secondary', bar: 'border-l-secondary' },
+  warning: { dot: 'bg-yellow-500', bar: 'border-l-yellow-500' },
 }
 
 export default function ToastContainer() {

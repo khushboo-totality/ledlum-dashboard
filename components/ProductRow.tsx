@@ -18,7 +18,7 @@ interface ProductRowProps {
 export default function ProductRow({ product, index, onClick, onEdit, onDelete, hasDetail }: ProductRowProps) {
   const { can } = useAuth()
   const [imgError, setImgError] = useState(false)
-  const imgUrl = getImageUrl(product.ImageLink)
+  const imgUrl = getImageUrl(product.ImageLink ?? '')
   const delay  = `${(index % 30) * 0.02}s`
 
   return (

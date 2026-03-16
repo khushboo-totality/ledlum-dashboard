@@ -8,7 +8,7 @@ type AuthTab = 'admin' | 'vendor' | 'guest'
 
 export default function AuthScreen() {
   const { login, loginAsGuest } = useAuth()
-  const [tab, setTab]           = useState<AuthTab>('guest')
+  const [tab, setTab]           = useState<AuthTab>('vendor')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
@@ -37,7 +37,7 @@ export default function AuthScreen() {
             Manage lighting products and place quote requests — all in one place.
           </p>
           {/* Role badges */}
-          {/* <div className="flex flex-col gap-2 mt-8">
+          <div className="flex flex-col gap-2 mt-8">
             {[
               { role: 'Admin',  desc: 'Full catalog management',      color: 'bg-white/20' },
               { role: 'Vendor', desc: 'Browse products & send quotes', color: 'bg-amber-400/30' },
@@ -48,7 +48,7 @@ export default function AuthScreen() {
                 <span className="text-white/50 text-xs font-pop">{r.desc}</span>
               </div>
             ))}
-          </div> */}
+          </div>
         </div>
         <p className="text-white/30 text-xs font-pop relative z-10">© {new Date().getFullYear()} LEDLUM. All rights reserved.</p>
       </div>

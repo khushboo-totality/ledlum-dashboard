@@ -13,12 +13,13 @@ interface ProductCardProps {
   onEdit: () => void
   onDelete: () => void
   hasDetail?: boolean
+  onQuickAdd?: () => void
 }
 
-export default function ProductCard({ product, index, onClick, onEdit, onDelete, hasDetail }: ProductCardProps) {
+export default function ProductCard({ product, index, onClick, onEdit, onDelete, hasDetail, onQuickAdd }: ProductCardProps) {
   const { can } = useAuth()
   const [imgError, setImgError] = useState(false)
-  const imgUrl = getImageUrl(product.ImageLink)
+  const imgUrl = getImageUrl(product.ImageLink ?? "")
   const delay  = `${(index % 24) * 0.03}s`
   const showAdminActions = can('edit') || can('delete')
 
@@ -80,7 +81,7 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
         <div className="text-xs text-gray-text font-pop mt-0.5">{product.Category}</div>
       </div>
 
-      {/* Admin action buttons — rendered in normal flow, not max-h trick */}
+      {/* Admin action buttons */}
       {showAdminActions && (
         <div
           className="px-3 pb-3 grid gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
@@ -103,6 +104,18 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
               Delete
             </button>
           )}
+        </div>
+      )}
+
+      {/* Quick-add for vendor/guest */}
+      {onQuickAdd && (
+        <div className="px-3 pb-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={e => { e.stopPropagation(); onQuickAdd() }}
+            className="w-full py-1.5 text-xs font-bold font-bai bg-primary/8 hover:bg-primary text-primary hover:text-white rounded-lg transition-all"
+          >
+            + Add to Quote
+          </button>
         </div>
       )}
     </div>

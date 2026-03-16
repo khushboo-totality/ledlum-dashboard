@@ -13,12 +13,19 @@ export interface Product {
   id: string
   Codes: string
   Category: string
-  ImageLink: string
+  ImageLink?: string
+  imageUrl?: string
+  Price?: string
+  Wattage?: string
+  ColourTemp?: string
+  BeamAngle?: string
+  Finish?: string
+  Dimensions?: string
+  Description?: string
   source: 'internal' | 'external'
   zone: string
-  createdAt: string
+  createdAt?: string
   updatedAt?: string | null
-  // Rich product detail (optional — only exists for configured products)
   detail?: ProductDetail
 }
 
@@ -28,57 +35,58 @@ export interface CCTOption {
   color: string
 }
 
-export interface ProductConfig {
-  models?: string[]
-  voltage?: string[]
-  dimensions?: string[]
-  watts?: string[]
-  cct?: CCTOption[]
-  bodyColors?: string[]
-  beamAngles?: string[]
-  ipRating?: string[]
-  cutoutSizes?: string[]
-  ledChip?: string[]
-  luminous?: string[]
-  cri?: string[]
+export interface ConfigOption {
+  id: string
+  label: string
+  values: string[]
 }
 
 export interface ProductPermutation {
-  voltage?: string
-  watts?: string
-  dimensions?: string
-  bodyColor?: string
-  beamAngles?: string
-  ledChip?: string
-  luminous?: string
-  cri?: string
-  cct?: string
-  [key: string]: string | undefined
+  [key: string]: string
+}
+
+export interface ProductAbout {
+  category: string
+  name: string
+  description: string
+  image?: string
 }
 
 export interface ProductDetail {
-  productAbout: {
-    category: string
-    name: string
-    description: string
-    image: string
-  }
-  config: ProductConfig
-  permutations: ProductPermutation[]
-  gallery: string[]
+  productAbout?: ProductAbout
+  config?: Record<string, any>
+  permutations?: ProductPermutation[]
+  gallery?: string[]
 }
 
-// ── Cart ─────────────────────────────────────────────────────────────
+export interface Permissions {
+  create: boolean
+  edit: boolean
+  delete: boolean
+  cart: boolean
+  share: boolean
+  download: boolean
+}
+
 export interface CartSelection {
   [key: string]: string
 }
+
+// ── Cart ─────────────────────────────────────────────────────────────
+export type BrowseMode = 'zone' | 'product'
 
 export interface CartItem {
   id: string
   productCode: string
   productName: string
   productImage: string
+  // Context — zone browsing
   zone: string
+  // Context — product type browsing
+  browseMode: BrowseMode
+  productCategory?: string        // e.g. "Indoor Lighting"
+  productSubcategory?: string     // e.g. "Downlights"
+  productTypeName?: string        // e.g. "Recessed Downlights"
   selection: CartSelection
   quantity: number
   addedAt: string
@@ -100,22 +108,10 @@ export interface Stats {
   bySource: Record<string, number>
 }
 
-export interface ApiResponse<T> {
-  data: T
-  meta?: { total: number; page: number; limit: number; pages: number }
-}
-
-export type ToastType = 'success' | 'error' | 'info'
+export type ToastType = 'success' | 'error' | 'info' | 'warning'
 
 export interface Toast {
   id: string
   message: string
   type: ToastType
-}
-
-export interface Permissions {
-  create: boolean
-  edit: boolean
-  delete: boolean
-  cart: boolean
 }

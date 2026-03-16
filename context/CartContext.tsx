@@ -7,7 +7,7 @@ import type { CartItem } from '@/types'
 interface CartContextType {
   items: CartItem[]
   isOpen: boolean
-  isPulsing: boolean          // ← triggers bounce animation on cart icon
+  isPulsing: boolean
   addItem: (item: Omit<CartItem, 'id' | 'addedAt'>) => void
   removeItem: (id: string) => void
   updateQty: (id: string, qty: number) => void
@@ -20,9 +20,9 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | null>(null)
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems]       = useState<CartItem[]>([])
-  const [isOpen, setIsOpen]     = useState(false)
-  const [isPulsing, setIsPulsing] = useState(false)
+  const [items, setItems]           = useState<CartItem[]>([])
+  const [isOpen, setIsOpen]         = useState(false)
+  const [isPulsing, setIsPulsing]   = useState(false)
 
   const triggerPulse = useCallback(() => {
     setIsPulsing(true)
@@ -36,11 +36,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
         i => i.productCode === item.productCode && JSON.stringify(i.selection) === selStr
       )
       if (existing) {
-        return prev.map(i => i.id === existing.id ? { ...i, quantity: i.quantity + item.quantity } : i)
+        return prev.map(i =>
+          i.id === existing.id ? { ...i, quantity: i.quantity + item.quantity } : i
+        )
       }
       return [...prev, { ...item, id: uuidv4(), addedAt: new Date().toISOString() }]
     })
-    // Pulse the icon — do NOT open the drawer
     triggerPulse()
   }, [triggerPulse])
 
