@@ -11,35 +11,48 @@ const CHOOSER_KEY = 'ledlum_browse_chosen'
 
 function PageInner() {
   const { user } = useAuth()
-  // null = not yet decided (show chooser), string = decided
   const [browseMode, setBrowseMode] = useState<BrowseMode | null>(null)
+  const [hydrated, setHydrated] = useState(false)
 
+  // Step 1: mark hydrated after mount (no SSR sessionStorage access)
   useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  // Step 2: once hydrated, check sessionStorage for existing choice
+  useEffect(() => {
+    if (!hydrated) return
     if (!user) {
-      // Reset on logout so chooser shows again next login
       setBrowseMode(null)
       return
     }
-    // Check if already chose this session
-    const saved = sessionStorage.getItem(CHOOSER_KEY) as BrowseMode | null
-    if (saved === 'zone' || saved === 'product') {
-      setBrowseMode(saved)
+    // Safe to access sessionStorage now (client only)
+    try {
+      const saved = sessionStorage.getItem(CHOOSER_KEY) as BrowseMode | null
+      if (saved === 'zone' || saved === 'product') {
+        setBrowseMode(saved)
+      } else {
+        setBrowseMode(null) // show chooser
+      }
+    } catch {
+      setBrowseMode(null)
     }
-    // else null → show chooser for ALL roles
-  }, [user])
+  }, [user, hydrated])
+
+  // Before hydration — render nothing (avoid SSR mismatch)
+  if (!hydrated) return null
 
   if (!user) return <AuthScreen />
 
-  // Show chooser once per session for ALL roles
   if (browseMode === null) {
     return (
       <BrowseChooser
         onChooseZone={() => {
-          sessionStorage.setItem(CHOOSER_KEY, 'zone')
+          // try { sessionStorage.setItem(CHOOSER_KEY, 'zone') } catch {}
           setBrowseMode('zone')
         }}
         onChooseProduct={() => {
-          sessionStorage.setItem(CHOOSER_KEY, 'product')
+          // try { sessionStorage.setItem(CHOOSER_KEY, 'product') } catch {}
           setBrowseMode('product')
         }}
       />
@@ -50,7 +63,7 @@ function PageInner() {
     <CatalogPage
       initialMode={browseMode}
       onModeChange={(m) => {
-        sessionStorage.setItem(CHOOSER_KEY, m)
+        // try { sessionStorage.setItem(CHOOSER_KEY, m) } catch {}
         setBrowseMode(m)
       }}
     />

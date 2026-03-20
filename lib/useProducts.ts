@@ -17,32 +17,42 @@ export function useProducts(zone?: string) {
       if (filters?.category) params.set('category', filters.category)
       if (filters?.source)   params.set('source',   filters.source)
       const res = await fetch(`/api/products?${params}`)
+      if (!res.ok) throw new Error('Failed to fetch products')
       const json = await res.json()
-      setProducts(json.data)
+      setProducts(json.data ?? [])
+    } catch (err) {
+      console.error('[useProducts] fetchProducts error:', err)
+      setProducts([])
     } finally {
       setLoading(false)
     }
   }, [zone])
 
   const fetchCategories = useCallback(async () => {
-    const url = zone ? `/api/categories?zone=${zone}` : '/api/categories'
-    const res = await fetch(url)
-    const cats = await res.json()
-    setCategories(cats)
+    try {
+      const url = zone ? `/api/categories?zone=${zone}` : '/api/categories'
+      const res = await fetch(url)
+      if (!res.ok) return
+      const cats = await res.json()
+      setCategories(Array.isArray(cats) ? cats : [])
+    } catch (err) {
+      console.error('[useProducts] fetchCategories error:', err)
+    }
   }, [zone])
 
   const createProduct = useCallback(async (data: ProductFormData): Promise<Product> => {
     const res = await fetch('/api/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...data, zone: zone || 'zone-a' }),
+      // Use zone from data (set by CrudModal) — NOT the hook's zone param
+      body: JSON.stringify(data),
     })
     if (!res.ok) throw new Error(await res.text())
     const product = await res.json()
     setProducts(prev => [product, ...prev])
     setCategories(prev => prev.includes(product.Category) ? prev : [...prev, product.Category])
     return product
-  }, [zone])
+  }, [])
 
   const updateProduct = useCallback(async (id: string, data: Partial<ProductFormData>): Promise<Product> => {
     const res = await fetch(`/api/products/${id}`, {
