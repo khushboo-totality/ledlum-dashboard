@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
 import type { Product, ProductFormData, BrowseMode } from '@/types'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
@@ -323,14 +322,15 @@ function ProductTypePanel({
 interface CatalogPageProps {
   initialMode?: BrowseMode
   onModeChange?: (m: BrowseMode) => void
+  zoneId?: string
+  initialProductId?: string
 }
 
-export default function CatalogPage({ initialMode = 'zone', onModeChange }: CatalogPageProps) {
+export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId: zoneIdProp, initialProductId }: CatalogPageProps) {
   const { can, user }  = useAuth()
   const { toast }      = useToast()
   const { addItem }    = useCart()
-  const searchParams   = useSearchParams()
-  const activeZone     = searchParams.get('zone') || ''
+  const activeZone     = zoneIdProp ?? ''
   const zone           = getZoneById(activeZone)
 
   const [browseMode, setBrowseMode] = useState<BrowseMode>(initialMode)
@@ -354,6 +354,12 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange }: Cata
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [modalMode, setModalMode]             = useState<'create' | 'edit' | null>(null)
   const [editingProduct, setEditingProduct]   = useState<Product | null>(null)
+
+  useEffect(() => {
+    if (!initialProductId || products.length === 0) return
+    const p = products.find(p => p.id === initialProductId || p.Codes === initialProductId)
+    if (p) setSelectedProduct(p)
+  }, [initialProductId, products])
 
   // ── Smart product filter for product mode ────────────────────────
   // Category selected only → ALL products in that category
@@ -462,14 +468,10 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange }: Cata
 
   return (
     <>
-      <Header productCount={productCount} />
+      {/* Header — only in product mode; zone mode has its own header inside ZoneNav */}
+      {browseMode === 'product' && <Header productCount={productCount} />}
 
-      {/* ── Mode bar — all roles ── */}
-      <div className="px-8 pt-4 pb-3 flex items-center gap-3 border-b border-gray">
-        <ModeSwitcher mode={browseMode} onChange={handleModeChange} />
-      </div>
-
-      {/* ── Zone tabs (zone mode) ── */}
+      {/* ── Zone tabs + header (zone mode) ── */}
       {browseMode === 'zone' && <ZoneNav />}
 
       {/* ── Product type filter panel (product mode) ── */}

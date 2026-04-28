@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import type { User, Role, Permissions } from '@/types'
 import { GUEST_USER, getPermissions, validateLogin } from '@/lib/auth'
 
@@ -18,9 +18,18 @@ const NULL_PERMS: Permissions = {
   create: false, edit: false, delete: false,
   cart: false, share: false, download: false,
 }
+const AUTH_KEY = 'ledlum_auth_user'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(AUTH_KEY)
+      if (saved) setUser(JSON.parse(saved) as User)
+    } catch {}
+  }, [])
 
   const permissions = user ? getPermissions(user.role as Role) : NULL_PERMS
 
@@ -28,12 +37,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = validateLogin(username, password)
     if (!u) return false
     setUser(u)
+    try { localStorage.setItem(AUTH_KEY, JSON.stringify(u)) } catch {}
     return true
   }, [])
 
-  const loginAsGuest = useCallback(() => setUser(GUEST_USER), [])
-  const logout       = useCallback(() => setUser(null), [])
-  const can          = useCallback((action: keyof Permissions) => permissions[action], [permissions])
+  const loginAsGuest = useCallback(() => {
+    setUser(GUEST_USER)
+    try { localStorage.setItem(AUTH_KEY, JSON.stringify(GUEST_USER)) } catch {}
+  }, [])
+
+  const logout = useCallback(() => {
+    setUser(null)
+    try { localStorage.removeItem(AUTH_KEY) } catch {}
+  }, [])
+
+  const can = useCallback((action: keyof Permissions) => permissions[action], [permissions])
 
   return (
     <AuthContext.Provider value={{ user, permissions, login, loginAsGuest, logout, can }}>

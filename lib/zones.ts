@@ -23,3 +23,13 @@ export const ZONES: Zone[] = [
 export function getZoneById(id: string): Zone | undefined {
   return ZONES.find(z => z.id === id)
 }
+
+/** "zone-a" → "a",  "artizan" → "artizan" */
+export function getZonePath(zoneId: string): string {
+  return zoneId.startsWith('zone-') ? zoneId.slice(5) : zoneId
+}
+
+/** Reverse of getZonePath – looks up zone by URL segment */
+export function getZoneByPath(path: string): Zone | undefined {
+  return ZONES.find(z => getZonePath(z.id) === path)
+}

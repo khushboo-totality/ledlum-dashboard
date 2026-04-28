@@ -1,13 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
 import LedlumLogo from './LedlumLogo'
 import VendorManager from './VendorManager'
-import { getZoneById } from '@/lib/zones'
-
 const ROLE_STYLES: Record<string, string> = {
   admin:  'bg-primary/10 text-primary border border-primary/20',
   editor: 'bg-blue-50 text-blue-700 border border-blue-200',
@@ -27,9 +24,6 @@ const AVATAR_STYLES: Record<string, string> = {
 export default function Header({ productCount }: { productCount: number }) {
   const { user, logout, can }          = useAuth()
   const { total, openCart, isPulsing } = useCart()
-  const searchParams                   = useSearchParams()
-  const activeZone                     = searchParams.get('zone') || ''
-  const zone                           = getZoneById(activeZone)
   const [vendorOpen, setVendorOpen]    = useState(false)
 
   if (!user) return null
@@ -38,15 +32,9 @@ export default function Header({ productCount }: { productCount: number }) {
     <>
       <header className="bg-white border-b border-gray h-16 flex items-center justify-between px-8 sticky top-0 z-40">
 
-        {/* Left: Logo + zone breadcrumb */}
+        {/* Left: Logo */}
         <div className="flex items-center gap-3">
           <LedlumLogo className="h-8 w-auto" />
-          {zone && (
-            <>
-              <span className="text-gray-mid font-bai text-lg select-none">/</span>
-              <span className="text-sm font-semibold font-bai text-foreground">{zone.label}</span>
-            </>
-          )}
         </div>
 
         {/* Right: actions + user */}
