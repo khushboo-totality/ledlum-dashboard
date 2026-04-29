@@ -63,6 +63,7 @@ const SEED: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[] = [
   { Codes: 'LB-263',          Category: 'Floor',   ImageLink: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600',                           source: 'internal', zone: 'abhav' },
   // ── ARTIZAN JEWELLERY ──
   { Codes: 'LLWW-021',        Category: 'Wall',    ImageLink: 'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=600',                        source: 'internal', zone: 'artizan-jewellery' },
+  { Codes: 'LB-263',          Category: 'Floor',   ImageLink: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600',                           source: 'internal', zone: 'artizan-jewellery' },
 ]
 
 // ── In-memory store (initialised once per tab from localStorage or seed) ──
