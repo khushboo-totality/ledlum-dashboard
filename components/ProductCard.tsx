@@ -19,79 +19,81 @@ interface ProductCardProps {
 export default function ProductCard({ product, index, onClick, onEdit, onDelete, hasDetail, onQuickAdd }: ProductCardProps) {
   const { can } = useAuth()
   const [imgError, setImgError] = useState(false)
-  const imgUrl = getImageUrl(product.ImageLink ?? "")
+  const imgUrl = getImageUrl(product.ImageLink ?? '')
   const delay  = `${(index % 24) * 0.03}s`
   const showAdminActions = can('edit') || can('delete')
 
   return (
     <div
-      className="group bg-white border border-gray rounded-xl overflow-visible cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover hover:border-primary/30 animate-card-in relative"
+      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/80 bg-white shadow-card animate-card-in transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-card-hover focus-within:ring-4 focus-within:ring-primary/10"
       style={{ animationDelay: delay }}
       onClick={onClick}
     >
-      {/* Image area — isolated so its overflow-hidden doesn't clip the card */}
-      <div className="aspect-square bg-gray rounded-t-xl overflow-hidden relative flex items-center justify-center">
+      <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gray">
         {imgUrl && !imgError ? (
           <Image
             src={imgUrl}
             alt={product.Codes}
             fill
-            sizes="(max-width: 768px) 50vw, 25vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-[1.04] pointer-events-none"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            className="pointer-events-none object-cover transition-transform duration-500 group-hover:scale-[1.05]"
             onError={() => setImgError(true)}
           />
         ) : (
-          <div className="flex flex-col items-center gap-2 p-4 pointer-events-none select-none">
+          <div className="pointer-events-none flex select-none flex-col items-center gap-2 p-4">
             <svg className="opacity-20" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
               <rect x="3" y="3" width="18" height="18" rx="2"/>
               <circle cx="8.5" cy="8.5" r="1.5"/>
               <polyline points="21 15 16 10 5 21"/>
             </svg>
-            <span className="text-[10px] text-gray-dark font-bai uppercase tracking-wide">No Image</span>
+            <span className="text-[10px] uppercase text-gray-dark font-bai">No Image</span>
           </div>
         )}
 
-        {/* Badges — pointer-events-none so they don't block clicks */}
-        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 pointer-events-none">
-          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide font-pop ${
+        <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1">
+          <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase shadow-sm font-pop ${
             product.source === 'external' ? 'bg-green-100 text-green-700' : 'bg-black/60 text-white'
           }`}>
             {product.source}
           </span>
           {hasDetail && (
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide font-pop bg-primary text-white">
+            <span className="rounded-full bg-primary px-2.5 py-1 text-[9px] font-bold uppercase text-white shadow-sm font-pop">
               Configure
             </span>
           )}
         </div>
 
-        {/* Vendor hover hint — pointer-events-none */}
         {can('cart') && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-            <span className="bg-primary text-white text-xs font-bold font-bai px-3 py-1.5 rounded-full shadow-lg translate-y-1 group-hover:translate-y-0 transition-transform duration-200">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <span className="translate-y-1 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-primary shadow-lg transition-transform duration-200 group-hover:translate-y-0 font-bai">
               + Add to Quote
             </span>
           </div>
         )}
       </div>
 
-      {/* Info row */}
-      <div className="px-4 pt-3 pb-3">
-        <div className="text-sm font-bold text-foreground font-bai tracking-wide truncate">{product.Codes}</div>
-        <div className="text-xs text-gray-text font-pop mt-0.5">{product.Category}</div>
+      <div className="px-4 pb-3 pt-3">
+        <div className="truncate text-sm font-extrabold tracking-wide text-foreground font-bai">{product.Codes}</div>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <div className="min-w-0 truncate text-xs text-gray-text font-pop">{product.Category}</div>
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray text-gray-text transition-colors group-hover:bg-primary group-hover:text-white">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+        </div>
       </div>
 
-      {/* Admin action buttons */}
       {showAdminActions && (
         <div
-          className="px-3 pb-3 grid gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+          className="grid gap-1.5 px-3 pb-3 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover:opacity-100"
           style={{ gridTemplateColumns: can('edit') && can('delete') ? '1fr 1fr' : '1fr' }}
           onClick={e => e.stopPropagation()}
         >
           {can('edit') && (
             <button
               onClick={e => { e.stopPropagation(); onEdit() }}
-              className="py-1.5 text-xs font-semibold font-bai border border-gray-mid rounded-lg text-gray-text hover:border-primary hover:text-primary transition-colors"
+              className="rounded-lg border border-gray-mid py-1.5 text-xs font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary font-bai"
             >
               Edit
             </button>
@@ -99,7 +101,7 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
           {can('delete') && (
             <button
               onClick={e => { e.stopPropagation(); onDelete() }}
-              className="py-1.5 text-xs font-semibold font-bai border border-primary/30 rounded-lg text-primary hover:bg-primary/5 transition-colors"
+              className="rounded-lg border border-primary/30 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/5 font-bai"
             >
               Delete
             </button>
@@ -107,12 +109,11 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
         </div>
       )}
 
-      {/* Quick-add for vendor/guest */}
       {onQuickAdd && (
-        <div className="px-3 pb-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150" onClick={e => e.stopPropagation()}>
+        <div className="px-3 pb-3 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover:opacity-100" onClick={e => e.stopPropagation()}>
           <button
             onClick={e => { e.stopPropagation(); onQuickAdd() }}
-            className="w-full py-1.5 text-xs font-bold font-bai bg-primary/8 hover:bg-primary text-primary hover:text-white rounded-lg transition-all"
+            className="w-full rounded-xl bg-primary/10 py-2 text-xs font-bold text-primary transition-all hover:bg-primary hover:text-white font-bai"
           >
             + Add to Quote
           </button>

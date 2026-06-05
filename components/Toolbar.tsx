@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { ZONES } from '@/lib/zones'
 
@@ -17,7 +18,6 @@ interface ToolbarProps {
   onView: (v: View) => void
   onAdd: () => void
   onSync: (url: string) => void
-  // Zone filter for admin (all-zones view)
   zoneFilter?: string
   onZoneFilter?: (v: string) => void
   showZoneFilter?: boolean
@@ -35,97 +35,93 @@ export default function Toolbar({
     if (url?.trim()) onSync(url.trim())
   }
 
-  const inputCls = "bg-white border border-gray-mid rounded-lg px-3 py-2 text-sm font-bai text-foreground placeholder:text-gray-dark outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-  const selectCls = `${inputCls} appearance-none pr-8 cursor-pointer`
+  const inputCls = 'h-11 rounded-xl border border-gray-mid bg-white px-3 text-sm font-bai text-foreground outline-none transition-all placeholder:text-gray-dark focus:border-primary focus:ring-4 focus:ring-primary/10'
+  const selectCls = `${inputCls} appearance-none cursor-pointer pr-9`
 
   return (
-    <div className="bg-white border-b border-gray px-8 py-3 flex items-center gap-3 flex-wrap">
-
-      {/* Search */}
-      <div className="relative flex-1 min-w-[180px]">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-dark pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input
-          type="text" value={search} onChange={e => onSearch(e.target.value)}
-          placeholder="Search by code or category…"
-          className={`${inputCls} pl-9 w-full`}
-        />
-      </div>
-
-      {/* Zone filter — only when viewing "All Zones" (admin) */}
-      {showZoneFilter && onZoneFilter && (
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-dark pointer-events-none" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-            <polyline points="9 22 9 12 15 12 15 22"/>
+    <div className="border-b border-white/80 bg-white/70 px-4 py-4 backdrop-blur sm:px-6 lg:px-8">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative flex-1">
+          <svg className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-dark" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <select
-            value={zoneFilter ?? ''}
-            onChange={e => onZoneFilter(e.target.value)}
-            className={`${selectCls} pl-8`}
-          >
-            <option value="">All Zones</option>
-            {ZONES.map(z => (
-              <option key={z.id} value={z.id}>{z.label}</option>
-            ))}
-          </select>
-          <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-dark" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={e => onSearch(e.target.value)}
+            placeholder="Search by code or category..."
+            className={`${inputCls} w-full pl-10`}
+          />
         </div>
-      )}
 
-      {/* Category */}
-      <div className="relative">
-        <select value={category} onChange={e => onCategory(e.target.value)} className={selectCls}>
-          <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-dark" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
+        <div className="flex flex-wrap items-center gap-2">
+          {showZoneFilter && onZoneFilter && (
+            <SelectShell>
+              <select
+                value={zoneFilter ?? ''}
+                onChange={e => onZoneFilter(e.target.value)}
+                className={`${selectCls} min-w-[9rem]`}
+              >
+                <option value="">All Zones</option>
+                {ZONES.map(z => (
+                  <option key={z.id} value={z.id}>{z.label}</option>
+                ))}
+              </select>
+            </SelectShell>
+          )}
+
+          <SelectShell>
+            <select value={category} onChange={e => onCategory(e.target.value)} className={`${selectCls} min-w-[10rem]`}>
+              <option value="">All Categories</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </SelectShell>
+
+          <SelectShell>
+            <select value={source} onChange={e => onSource(e.target.value)} className={`${selectCls} min-w-[8.5rem]`}>
+              <option value="">All Sources</option>
+              <option value="internal">Internal</option>
+              <option value="external">External</option>
+            </select>
+          </SelectShell>
+
+          <div className="flex h-11 overflow-hidden rounded-xl border border-gray-mid bg-white">
+            <button onClick={() => onView('grid')} title="Grid view"
+              className={`tap-target flex items-center px-3 transition-colors ${view === 'grid' ? 'bg-primary text-white' : 'text-gray-dark hover:bg-gray hover:text-foreground'}`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </button>
+            <button onClick={() => onView('list')} title="List view"
+              className={`tap-target flex items-center border-l border-gray-mid px-3 transition-colors ${view === 'list' ? 'bg-primary text-white' : 'text-gray-dark hover:bg-gray hover:text-foreground'}`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
+
+          <button onClick={handleSync}
+            className="tap-target flex items-center gap-1.5 rounded-xl border border-gray-mid bg-white px-4 py-2 text-sm font-semibold font-bai text-gray-text transition-all hover:border-primary hover:text-primary">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span className="hidden sm:inline">Sync</span>
+          </button>
+
+          {can('create') && (
+            <button onClick={onAdd}
+              className="tap-target flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold font-bai text-white shadow-sm transition-colors hover:bg-primary-dark">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span className="hidden sm:inline">Add Product</span>
+            </button>
+          )}
+        </div>
       </div>
+    </div>
+  )
+}
 
-      {/* Source */}
-      <div className="relative">
-        <select value={source} onChange={e => onSource(e.target.value)} className={selectCls}>
-          <option value="">All Sources</option>
-          <option value="internal">Internal</option>
-          <option value="external">External</option>
-        </select>
-        <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-dark" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </div>
-
-      {/* View toggle */}
-      <div className="flex border border-gray-mid rounded-lg overflow-hidden">
-        <button onClick={() => onView('grid')} title="Grid view"
-          className={`px-3 py-2 flex items-center transition-colors ${view === 'grid' ? 'bg-primary text-white' : 'bg-white text-gray-dark hover:text-foreground'}`}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        </button>
-        <button onClick={() => onView('list')} title="List view"
-          className={`px-3 py-2 flex items-center border-l border-gray-mid transition-colors ${view === 'list' ? 'bg-primary text-white' : 'bg-white text-gray-dark hover:text-foreground'}`}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        </button>
-      </div>
-
-      {/* Sync */}
-      <button onClick={handleSync}
-        className="flex items-center gap-1.5 px-4 py-2 border border-gray-mid rounded-lg text-sm font-semibold font-bai text-gray-text hover:border-primary hover:text-primary transition-all">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        Sync
-      </button>
-
-      {/* Add Product */}
-      {can('create') && (
-        <button onClick={onAdd}
-          className="flex items-center gap-1.5 px-5 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-bold font-bai transition-colors">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Product
-        </button>
-      )}
+function SelectShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative">
+      {children}
+      <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-dark" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
     </div>
   )
 }

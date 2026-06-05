@@ -77,15 +77,17 @@ function ModeSwitcher({
   const current = options.find(o => o.value === mode)!
 
   return (
-    <div ref={ref} className="relative inline-block">
+    <div ref={ref} className="relative w-full sm:w-auto">
       <button
         onClick={() => setOpen(v => !v)}
-        className={`flex items-center gap-2.5 h-10 border-2 rounded-xl px-4 text-sm font-bold font-bai transition-all ${
+        className={`flex h-11 w-full items-center justify-between gap-2.5 rounded-xl border bg-white/80 px-4 text-sm font-bold font-bai shadow-sm transition-all sm:w-auto ${
           open ? 'border-primary bg-primary/5 text-primary' : 'border-gray hover:border-primary text-foreground'
         }`}
       >
-        <span className={open ? 'text-primary' : 'text-primary'}>{current.icon}</span>
-        <span>{current.label}</span>
+        <span className="flex items-center gap-2.5">
+          <span className="text-primary">{current.icon}</span>
+          <span>{current.label}</span>
+        </span>
         <svg
           width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
           className={`text-gray-dark ml-0.5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -95,7 +97,7 @@ function ModeSwitcher({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-2 w-72 bg-white border border-gray rounded-2xl shadow-xl z-30 overflow-hidden">
+        <div className="absolute left-0 top-full z-30 mt-2 w-full overflow-hidden rounded-2xl border border-gray bg-white shadow-xl sm:w-72">
           <div className="p-1.5">
             {options.map(opt => (
               <button
@@ -160,9 +162,9 @@ function ProductTypePanel({
   onViewLayout: (v: ViewLayout) => void
 }) {
   return (
-    <div className="border-b border-gray bg-white">
+    <div className="border-b border-white/80 bg-white/75 backdrop-blur">
       {/* ── Level 1: Category row ── */}
-      <div className="px-8 pt-3 pb-2 flex items-center gap-2 overflow-x-auto scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 pt-4 scrollbar-hide sm:px-6 lg:px-8">
         <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop flex-shrink-0 mr-1">
           Category
         </span>
@@ -187,7 +189,7 @@ function ProductTypePanel({
 
       {/* ── Level 2: Subcategory row ── */}
       {activeCategory.subcategories.length > 0 && (
-        <div className="px-8 pb-2 flex items-center gap-2 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide sm:px-6 lg:px-8">
           <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop flex-shrink-0 mr-1">
             Subcategory
           </span>
@@ -224,7 +226,7 @@ function ProductTypePanel({
 
       {/* ── Level 3: Product type row (only when subcategory selected) ── */}
       {activeSubcategory && (
-        <div className="px-8 pb-3 flex items-center gap-2 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide sm:px-6 lg:px-8">
           <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop flex-shrink-0 mr-1">
             Product Type
           </span>
@@ -264,9 +266,8 @@ function ProductTypePanel({
       )}
 
       {/* ── Search + view controls ── */}
-      <div className="px-8 pb-3 flex items-center gap-3 border-t border-gray pt-3">
-        {/* Active filter breadcrumb */}
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+      <div className="flex flex-col gap-3 border-t border-white/80 px-4 pb-4 pt-3 sm:px-6 md:flex-row md:items-center lg:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <div className="w-1 h-4 bg-primary rounded-full flex-shrink-0" />
           <span className="text-xs font-semibold font-bai text-foreground truncate">
             {activeCategory.label}
@@ -283,7 +284,7 @@ function ProductTypePanel({
         </div>
 
         {/* Search */}
-        <div className="relative flex-shrink-0">
+        <div className="relative w-full flex-shrink-0 md:w-56">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
             className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-dark pointer-events-none">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -293,12 +294,12 @@ function ProductTypePanel({
             value={search}
             onChange={e => onSearch(e.target.value)}
             placeholder="Search products…"
-            className="pl-8 pr-3 py-1.5 border border-gray-mid rounded-lg text-xs font-bai text-foreground placeholder:text-gray-dark outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all w-44"
+            className="h-10 w-full rounded-xl border border-gray-mid bg-white pl-9 pr-3 text-xs font-bai text-foreground outline-none transition-all placeholder:text-gray-dark focus:border-primary focus:ring-4 focus:ring-primary/10"
           />
         </div>
 
         {/* View toggle */}
-        <div className="flex items-center border border-gray rounded-lg overflow-hidden flex-shrink-0">
+        <div className="flex h-10 flex-shrink-0 items-center overflow-hidden rounded-xl border border-gray-mid bg-white">
           {(['grid', 'list'] as ViewLayout[]).map(v => (
             <button
               key={v}
@@ -467,12 +468,26 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const isVendorOrGuest = user?.role === 'vendor' || user?.role === 'guest'  // kept for cart banner only
 
   return (
-    <>
+    <div className="min-h-screen app-shell">
       {/* Header — only in product mode; zone mode has its own header inside ZoneNav */}
       {browseMode === 'product' && <Header productCount={productCount} />}
 
       {/* ── Zone tabs + header (zone mode) ── */}
       {browseMode === 'zone' && <ZoneNav />}
+
+      <div className="flex flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+        <ModeSwitcher mode={browseMode} onChange={handleModeChange} />
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-dark font-pop">
+          <span className="rounded-full border border-white/80 bg-white/80 px-3 py-1.5 shadow-sm">
+            {productCount} product{productCount !== 1 ? 's' : ''}
+          </span>
+          {can('cart') && (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 shadow-sm">
+              Vendor quote mode
+            </span>
+          )}
+        </div>
+      </div>
 
       {/* ── Product type filter panel (product mode) ── */}
       {browseMode === 'product' && (
@@ -509,7 +524,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
       {/* ── Welcome banner for vendors ── */}
       {can('cart') && (
-        <div className="mx-8 mt-4 flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
+        <div className="mx-4 mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm sm:mx-6 lg:mx-8">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-600 flex-shrink-0">
             <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
@@ -522,10 +537,10 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       )}
 
       {/* ── Main content ── */}
-      <main className="px-8 py-5 pb-24">
+      <main className="px-4 py-5 pb-24 sm:px-6 lg:px-8">
         {/* Zone heading */}
         {browseMode === 'zone' && zone && (
-          <div className="mb-5 flex items-center gap-3">
+          <div className="mb-5 flex flex-wrap items-center gap-3">
             <div className="w-1 h-6 bg-primary rounded-full" />
             <h2 className="text-lg font-bold font-bai text-foreground">{zone.label}</h2>
             <span className="text-xs text-gray-dark font-pop bg-gray px-2.5 py-1 rounded-full border border-gray-mid">
@@ -558,7 +573,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
         {/* Grid */}
         {displayedProducts.length > 0 && viewLayout === 'grid' && (
-          <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          <div className="grid gap-4 sm:gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))' }}>
             {displayedProducts.map((p, i) => (
               <ProductCard
                 key={p.id} product={p} index={i}
@@ -611,6 +626,6 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
       <CartDrawer />
       <ToastContainer />
-    </>
+    </div>
   )
 }

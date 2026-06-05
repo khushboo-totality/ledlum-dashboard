@@ -33,7 +33,9 @@
 * { box-sizing: border-box; }
 
 body {
-  background-color: var(--background);
+  background:
+    radial-gradient(circle at top left, rgba(154, 140, 102, 0.10), transparent 34rem),
+    linear-gradient(180deg, #fbfaf7 0%, #f5f6f3 42%, #ffffff 100%);
   color: var(--foreground);
   font-family: var(--primary-font);
   min-height: 100vh;
@@ -42,4 +44,18 @@ body {
 @layer utilities {
   .font-bai { font-family: var(--primary-font); }
   .font-pop { font-family: var(--secondary-font); }
+  .app-shell {
+    background:
+      radial-gradient(circle at 10% 0%, rgba(154, 140, 102, 0.12), transparent 26rem),
+      radial-gradient(circle at 95% 10%, rgba(23, 23, 23, 0.06), transparent 24rem),
+      #f7f7f3;
+  }
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(16px);
+  }
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
