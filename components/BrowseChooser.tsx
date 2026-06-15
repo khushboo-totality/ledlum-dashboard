@@ -83,8 +83,9 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
           </div>
         </div>
 
-        <main className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[0.9fr_1.1fr] lg:py-12">
-          <section className="max-w-xl">
+        <main className="items-center gap-8 py-8 lg:grid-cols-[0.9fr_1.1fr] lg:py-12 space-y-8">
+          <section className="w-full flex justify-end ">
+            <div className="w-full ">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-3 py-1.5 text-xs font-bold uppercase text-primary">
               {user?.role ?? 'catalog'} workspace
             </div>
@@ -94,17 +95,20 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
             <p className="mt-4 max-w-lg text-sm leading-6 text-gray-text font-pop sm:text-base">
               Browse the LEDLUM catalogue by project zone or product type, then configure products and build quotes from one workspace.
             </p>
-            <div className="mt-7 grid grid-cols-3 gap-3">
+            </div>
+            <div className="w-full flex justify-end">
+            <div className="grid grid-cols-1 gap-3 w-full max-w-xs">
               {[
                 ['15+', 'Zones'],
                 ['8', 'Categories'],
                 [can('cart') ? String(total) : 'Live', can('cart') ? 'Quote items' : 'Catalog'],
               ].map(([value, label]) => (
-                <div key={label} className="rounded-2xl border border-white/80 bg-white/70 px-4 py-3 shadow-card">
+                <div key={label} className="rounded-2xl flex items-center justify-between border border-white/80 bg-white/70 px-4 py-3 shadow-card">
                   <div className="text-lg font-extrabold text-foreground">{value}</div>
-                  <div className="mt-0.5 text-[11px] font-semibold uppercase text-gray-dark">{label}</div>
+                  <div className="text-[11px] font-semibold uppercase text-primary">{label}</div>
                 </div>
               ))}
+            </div>
             </div>
           </section>
 
@@ -122,15 +126,18 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
                   <polyline points="9 22 9 12 15 12 15 22"/>
                 </svg>
               </div>
-              <h2 className="mb-2 text-xl font-extrabold text-foreground transition-colors group-hover:text-primary">
-                Browse by Zone
+              <h2 className="mb-2 flex items-center justify-between text-xl font-extrabold text-foreground transition-colors group-hover:text-primary">
+                <span>Browse by Zone</span>
+                <span>
+                  <svg width="30px" height="30px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="2"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M4 12H20M20 12L16 8M20 12L16 16" stroke="#9a8c66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>
+                </span>
               </h2>
               <p className="mb-6 text-sm leading-relaxed text-gray-text font-pop">
                 Explore products assigned to project areas and room contexts.
               </p>
               <div className="mb-5 flex items-center gap-1.5 text-sm font-extrabold text-primary">
                 Select zone
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <svg width="13" height="13" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="9 18 15 12 9 6"/>
                 </svg>
               </div>
@@ -157,8 +164,9 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
                   <rect x="15" y="14" width="7" height="7" rx="1"/>
                 </svg>
               </div>
-              <h2 className="mb-2 text-xl font-extrabold text-white transition-colors group-hover:text-secondary">
-                Browse by Product Type
+              <h2 className="mb-2 flex justify-between items-center gap-2 text-xl font-extrabold text-white transition-colors group-hover:text-secondary">
+                <span>Browse by Product Type</span>
+                <svg width="30px" height="30px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M4 12H20M20 12L16 8M20 12L16 16" stroke="#9a8c66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>
               </h2>
               <p className="mb-6 text-sm leading-relaxed text-white/70 font-pop">
                 Navigate the catalogue by category, subcategory and configuration type.
