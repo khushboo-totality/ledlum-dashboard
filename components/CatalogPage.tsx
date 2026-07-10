@@ -387,6 +387,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         (p.Description ?? '').toLowerCase().includes(q)
       )
     }
+    
     return list
   }, [activeCat, activeSub, activeTypeId, ptSearch])
 
