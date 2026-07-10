@@ -113,7 +113,7 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
           </section>
 
           <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <button
+            {/* <button
               ref={zoneRef}
               onClick={onChooseZone}
               className="group relative min-h-[22rem] overflow-hidden rounded-2xl border border-white/80 bg-white p-6 text-left shadow-card transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-card-hover focus:outline-none focus:ring-4 focus:ring-primary/15 sm:p-7"
@@ -148,7 +148,7 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
                   </span>
                 ))}
               </div>
-            </button>
+            </button> */}
 
             <button
               onClick={onChooseProduct}

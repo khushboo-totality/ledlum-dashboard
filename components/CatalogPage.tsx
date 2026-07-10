@@ -27,10 +27,13 @@ import ProductDetail from '@/components/ProductDetail'
 import CrudModal from '@/components/CrudModal'
 import CartDrawer from '@/components/CartDrawer'
 import ToastContainer from '@/components/ToastContainer'
+import { usePathname } from 'next/navigation'
 
 type ViewLayout = 'grid' | 'list'
 
 // ── Mode Switcher Dropdown ─────────────────────────────────────────────
+
+
 function ModeSwitcher({
   mode, onChange,
 }: {
@@ -336,6 +339,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
   const [browseMode, setBrowseMode] = useState<BrowseMode>(initialMode)
   const [viewLayout, setViewLayout] = useState<ViewLayout>('grid')
+  const pathname = usePathname()
 
   // ── Zone mode state ─────────────────────────────────────────────
   const { products, categories, createProduct, updateProduct, deleteProduct, syncExternal } =
@@ -476,18 +480,25 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       {browseMode === 'zone' && <ZoneNav />}
 
       <div className="flex flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-        <ModeSwitcher mode={browseMode} onChange={handleModeChange} />
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-dark font-pop">
-          <span className="rounded-full border border-white/80 bg-white/80 px-3 py-1.5 shadow-sm">
-            {productCount} product{productCount !== 1 ? 's' : ''}
-          </span>
-          {can('cart') && (
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 shadow-sm">
-              Vendor quote mode
-            </span>
-          )}
-        </div>
-      </div>
+  
+  {/* ✅ Show ONLY on /zone */}
+  {pathname.startsWith('/zone') && (
+    <ModeSwitcher mode={browseMode} onChange={handleModeChange} />
+  )}
+
+  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-dark font-pop">
+    <span className="rounded-full border border-white/80 bg-white/80 px-3 py-1.5 shadow-sm">
+      {productCount} product{productCount !== 1 ? 's' : ''}
+    </span>
+
+    {can('cart') && (
+      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 shadow-sm">
+        Vendor quote mode
+      </span>
+    )}
+  </div>
+
+</div>
 
       {/* ── Product type filter panel (product mode) ── */}
       {browseMode === 'product' && (
