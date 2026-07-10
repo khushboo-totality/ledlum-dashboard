@@ -25,7 +25,7 @@ const AVATAR_STYLES: Record<string, string> = {
 export default function Header({ productCount }: { productCount: number }) {
   const { user, logout, can }          = useAuth()
   const { total, openCart, isPulsing } = useCart()
-  const [vendorOpen, setVendorOpen]    = useState(false)
+  // const [vendorOpen, setVendorOpen]    = useState(false)
 
   if (!user) return null
 
@@ -42,7 +42,7 @@ export default function Header({ productCount }: { productCount: number }) {
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
-          {user.role === 'admin' && (
+          {/* {user.role === 'admin' && (
             <button
               onClick={() => setVendorOpen(true)}
               className="tap-target flex items-center gap-1.5 rounded-xl border border-gray-mid bg-white/80 px-3.5 py-2 text-sm font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary"
@@ -55,7 +55,7 @@ export default function Header({ productCount }: { productCount: number }) {
               </svg>
               <span className="hidden sm:inline">Vendors</span>
             </button>
-          )}
+          )} */}
 
           {can('cart') && (
             <button
@@ -118,7 +118,7 @@ export default function Header({ productCount }: { productCount: number }) {
         </div>
       </header>
 
-      <VendorManager isOpen={vendorOpen} onClose={() => setVendorOpen(false)} />
+      {/* <VendorManager isOpen={vendorOpen} onClose={() => setVendorOpen(false)} /> */}
     </>
   )
 }

@@ -270,7 +270,7 @@ function ProductTypePanel({
 
       {/* ── Search + view controls ── */}
       <div className="flex flex-col gap-3 border-t border-white/80 px-4 pb-4 pt-3 sm:px-6 md:flex-row md:items-center lg:px-8">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        {/* <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <div className="w-1 h-4 bg-primary rounded-full flex-shrink-0" />
           <span className="text-xs font-semibold font-bai text-foreground truncate">
             {activeCategory.label}
@@ -284,10 +284,10 @@ function ProductTypePanel({
           <span className="text-[10px] font-pop text-gray-dark bg-gray border border-gray-mid px-2 py-0.5 rounded-full flex-shrink-0 ml-1">
             {productCount} product{productCount !== 1 ? 's' : ''}
           </span>
-        </div>
+        </div> */}
 
         {/* Search */}
-        <div className="relative w-full flex-shrink-0 md:w-56">
+        {/* <div className="relative w-full flex-shrink-0 md:w-56">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
             className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-dark pointer-events-none">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -299,10 +299,10 @@ function ProductTypePanel({
             placeholder="Search products…"
             className="h-10 w-full rounded-xl border border-gray-mid bg-white pl-9 pr-3 text-xs font-bai text-foreground outline-none transition-all placeholder:text-gray-dark focus:border-primary focus:ring-4 focus:ring-primary/10"
           />
-        </div>
+        </div> */}
 
         {/* View toggle */}
-        <div className="flex h-10 flex-shrink-0 items-center overflow-hidden rounded-xl border border-gray-mid bg-white">
+        {/* <div className="flex h-10 flex-shrink-0 items-center overflow-hidden rounded-xl border border-gray-mid bg-white">
           {(['grid', 'list'] as ViewLayout[]).map(v => (
             <button
               key={v}
@@ -316,7 +316,7 @@ function ProductTypePanel({
               }
             </button>
           ))}
-        </div>
+        </div> */}
       </div>
     </div>
   )
@@ -518,7 +518,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       )}
 
       {/* ── Zone mode toolbar ── */}
-      {browseMode === 'zone' && (
+      {/* {browseMode === 'zone' && ( */}
         <Toolbar
           search={search}     onSearch={setSearch}
           category={category} onCategory={setCategory}
@@ -531,7 +531,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
           onZoneFilter={setZoneFilter}
           showZoneFilter={!activeZone && user?.role === 'admin'}
         />
-      )}
+      {/* )} */}
 
       {/* ── Welcome banner for vendors ── */}
       {can('cart') && (

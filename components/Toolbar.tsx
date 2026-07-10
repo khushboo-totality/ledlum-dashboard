@@ -1,8 +1,9 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { ZONES } from '@/lib/zones'
+import VendorManager from './VendorManager'
 
 type View = 'grid' | 'list'
 
@@ -34,6 +35,8 @@ export default function Toolbar({
     const url = prompt('Enter external API URL to sync:')
     if (url?.trim()) onSync(url.trim())
   }
+
+  const [vendorOpen, setVendorOpen] = useState(false)
 
   const inputCls = 'h-11 rounded-xl border border-gray-mid bg-white px-3 text-sm font-bai text-foreground outline-none transition-all placeholder:text-gray-dark focus:border-primary focus:ring-4 focus:ring-primary/10'
   const selectCls = `${inputCls} appearance-none cursor-pointer pr-9`
@@ -109,6 +112,21 @@ export default function Toolbar({
               <span className="hidden sm:inline">Add Product</span>
             </button>
           )}
+
+          <button
+              onClick={() => setVendorOpen(true)}
+              className="tap-target flex items-center gap-1.5 rounded-xl border border-gray-mid bg-white/80 px-3.5 py-2 text-sm font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              <span className="hidden sm:inline">Vendors</span>
+            </button>
+
+          <VendorManager isOpen={vendorOpen} onClose={() => setVendorOpen(false)} />
         </div>
       </div>
     </div>

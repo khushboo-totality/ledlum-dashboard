@@ -82,7 +82,7 @@ export default function ZoneNav() {
                   {user.role}
                 </span>
               </div>
-              <button
+              {/* <button
                 onClick={logout}
                 title="Sign out"
                 className="tap-target flex items-center gap-1.5 rounded-xl border border-gray-mid bg-white/80 px-3 py-2 text-sm font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary"
@@ -93,7 +93,7 @@ export default function ZoneNav() {
                   <line x1="21" y1="12" x2="9" y2="12"/>
                 </svg>
                 <span className="hidden sm:inline">Sign out</span>
-              </button>
+              </button> */}
             </>
           ) : (
             <button
