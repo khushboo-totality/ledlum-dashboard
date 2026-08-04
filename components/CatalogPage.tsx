@@ -480,11 +480,11 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   )}
 
   <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-gray-dark font-pop">
-    {browseMode === 'product' && (
+    {/* {browseMode === 'product' && (
       <span className="rounded-full border border-white/80 bg-white/80 px-3 py-1.5 shadow-sm">
         {productCount} product{productCount !== 1 ? 's' : ''}
       </span>
-    )}
+    )} */}
 
     {can('cart') && (
       <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 shadow-sm">
