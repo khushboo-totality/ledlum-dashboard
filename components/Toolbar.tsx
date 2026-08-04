@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { ZONES } from '@/lib/zones'
+import { useZones } from '@/context/ZonesContext'
 import VendorManager from './VendorManager'
 
 type View = 'grid' | 'list'
@@ -18,7 +18,6 @@ interface ToolbarProps {
   view: View
   onView: (v: View) => void
   onAdd: () => void
-  onSync: (url: string) => void
   zoneFilter?: string
   onZoneFilter?: (v: string) => void
   showZoneFilter?: boolean
@@ -26,15 +25,11 @@ interface ToolbarProps {
 
 export default function Toolbar({
   search, onSearch, category, onCategory, source, onSource,
-  categories, view, onView, onAdd, onSync,
+  categories, view, onView, onAdd,
   zoneFilter, onZoneFilter, showZoneFilter,
 }: ToolbarProps) {
   const { can, user } = useAuth()
-
-  const handleSync = () => {
-    const url = prompt('Enter external API URL to sync:')
-    if (url?.trim()) onSync(url.trim())
-  }
+  const { zones } = useZones()
 
   const [vendorOpen, setVendorOpen] = useState(false)
 
@@ -66,7 +61,7 @@ export default function Toolbar({
                 className={`${selectCls} min-w-[9rem]`}
               >
                 <option value="">All Zones</option>
-                {ZONES.map(z => (
+                {zones.map(z => (
                   <option key={z.id} value={z.id}>{z.label}</option>
                 ))}
               </select>
@@ -98,12 +93,6 @@ export default function Toolbar({
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
             </button>
           </div>
-
-          <button onClick={handleSync}
-            className="tap-target flex items-center gap-1.5 rounded-xl border border-gray-mid bg-white px-4 py-2 text-sm font-semibold font-bai text-gray-text transition-all hover:border-primary hover:text-primary">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            <span className="hidden sm:inline">Sync</span>
-          </button>
 
           {can('create') && (
             <button onClick={onAdd}

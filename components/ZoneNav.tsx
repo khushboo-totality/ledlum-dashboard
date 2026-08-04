@@ -1,7 +1,8 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
-import { ZONES, getZoneByPath, getZonePath } from '@/lib/zones'
+import { getZonePath } from '@/lib/zones'
+import { useZones } from '@/context/ZonesContext'
 import LedlumLogo from './LedlumLogo'
 import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
@@ -15,6 +16,7 @@ export default function ZoneNav({ productCount }: ZoneNavProps) {
   const pathname = usePathname()
   const { can } = useAuth()
   const { total, openCart, isPulsing } = useCart()
+  const { zones, getZoneByPath } = useZones()
 
   const segments   = pathname.split('/').filter(Boolean)
   const activeZone = segments[0] === 'zone' && segments[1]
@@ -88,7 +90,7 @@ export default function ZoneNav({ productCount }: ZoneNavProps) {
             All Zones
           </button>
 
-          {ZONES.map(zone => (
+          {zones.map(zone => (
             <button
               key={zone.id}
               onClick={() => navigate(zone.id)}

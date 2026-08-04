@@ -18,7 +18,8 @@ interface ProductRowProps {
 export default function ProductRow({ product, index, onClick, onEdit, onDelete, hasDetail }: ProductRowProps) {
   const { can } = useAuth()
   const [imgError, setImgError] = useState(false)
-  const imgUrl = getImageUrl(product.ImageLink ?? '')
+  const displayCode = product.model ?? product.Codes
+  const imgUrl = getImageUrl(product.hero_image ?? product.ImageLink ?? '')
   const delay  = `${(index % 30) * 0.02}s`
 
   return (
@@ -30,7 +31,7 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
       {/* Thumb */}
       <div className="w-12 h-12 rounded-lg bg-gray overflow-hidden flex-shrink-0 flex items-center justify-center relative">
         {imgUrl && !imgError ? (
-          <Image src={imgUrl} alt={product.Codes} fill sizes="48px" className="object-cover" onError={() => setImgError(true)} />
+          <Image src={imgUrl} alt={displayCode} fill sizes="48px" className="object-cover" onError={() => setImgError(true)} />
         ) : (
           <svg className="opacity-20" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -42,7 +43,7 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
 
       {/* Code + badges */}
       <div className="flex items-center gap-2 min-w-[160px]">
-        <span className="font-bold text-sm font-bai text-foreground truncate">{product.Codes}</span>
+        <span className="font-bold text-sm font-bai text-foreground truncate">{displayCode}</span>
         {hasDetail && (
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide font-pop bg-primary/10 text-primary border border-primary/20 flex-shrink-0">
             Config

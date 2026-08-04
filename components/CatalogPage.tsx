@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { useCart } from '@/context/CartContext'
 import { useProducts } from '@/lib/useProducts'
-import { getZoneById } from '@/lib/zones'
+import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
 import {
   TAXONOMY,
@@ -334,6 +334,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const { can, user }  = useAuth()
   const { toast }      = useToast()
   const { addItem }    = useCart()
+  const { getZoneById } = useZones()
   const activeZone     = zoneIdProp ?? ''
   const zone           = getZoneById(activeZone)
 
@@ -342,7 +343,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const pathname = usePathname()
 
   // ── Zone mode state ─────────────────────────────────────────────
-  const { products, categories, createProduct, updateProduct, deleteProduct, syncExternal } =
+  const { products, categories, createProduct, updateProduct, deleteProduct } =
     useProducts(activeZone || undefined)
   const [search, setSearch]         = useState('')
   const [category, setCategory]     = useState('')
@@ -442,14 +443,6 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     }
   }, [modalMode, editingProduct, createProduct, updateProduct, toast, activeZone])
 
-  const handleSync = useCallback(async (url: string) => {
-    try {
-      toast('Syncing…', 'info')
-      const r = await syncExternal(url)
-      toast(`Synced: +${r.added} added, ${r.updated} updated`, 'success')
-    } catch { toast('Sync failed — check the URL', 'error') }
-  }, [syncExternal, toast])
-
   const handleQuickAdd = useCallback((product: Product) => {
     if (!can('cart')) return
     addItem({
@@ -528,7 +521,6 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
           categories={categories}
           view={viewLayout}   onView={setViewLayout}
           onAdd={() => setModalMode('create')}
-          onSync={handleSync}
           zoneFilter={zoneFilter}
           onZoneFilter={setZoneFilter}
           showZoneFilter={!activeZone && user?.role === 'admin'}

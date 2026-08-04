@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
 import { useToast } from '@/context/ToastContext'
 import { getImageUrl } from '@/lib/auth'
-import { getZoneById } from '@/lib/zones'
+import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
 
 interface Props {
@@ -48,6 +48,7 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
   const { can, user } = useAuth()
   const { addItem, openCart } = useCart()
   const { toast } = useToast()
+  const { getZoneById } = useZones()
 
   const [open, setOpen]             = useState(false)
   const [imgError, setImgError]     = useState(false)
@@ -199,6 +200,8 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
   const heroImage = detail?.productAbout?.image ?? imgUrl
   const fmt       = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   const zone      = getZoneById(product?.zone ?? '')
+  const zoneLabels = (product?.zones?.length ? product.zones : [product?.zone].filter(Boolean) as string[])
+    .map(id => getZoneById(id)?.label ?? id).join(', ')
 
   const galleries = detail?.gallery ?? (imgUrl ? [imgUrl] : [])
 
@@ -571,16 +574,44 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
                 {[
                   { k: 'Code',     v: product?.Codes },
                   { k: 'Category', v: product?.Category },
-                  { k: 'Zone',     v: zone?.label ?? product?.zone },
+                  { k: 'Zone',     v: zoneLabels || product?.zone },
                   { k: 'Source',   v: product?.source },
                   { k: 'Added',    v: product?.createdAt ? fmt(product.createdAt) : '' },
-                ].map(r => (
+                  // Real-schema spec rows — only shown when Supabase actually populated them
+                  product?.family      ? { k: 'Family',        v: product.family } : null,
+                  product?.collection  ? { k: 'Indoor/Outdoor', v: product.collection } : null,
+                  product?.product_type? { k: 'Product Type',   v: product.product_type } : null,
+                  product?.watts       ? { k: 'Watts',          v: product.watts } : null,
+                  product?.cct?.length ? { k: 'CCT',            v: product.cct.join(', ') } : null,
+                  product?.beam_angle  ? { k: 'Beam Angle',     v: product.beam_angle } : null,
+                  product?.cutout_size ? { k: 'Cutout Size',    v: product.cutout_size } : null,
+                  product?.body_colors?.length ? { k: 'Body Colors', v: product.body_colors.join(', ') } : null,
+                  product?.ip_rating   ? { k: 'IP Rating',      v: product.ip_rating } : null,
+                  product?.led_chip    ? { k: 'LED Chip',       v: product.led_chip } : null,
+                  product?.luminous    ? { k: 'Luminous Flux',  v: product.luminous } : null,
+                  product?.cri         ? { k: 'CRI',            v: product.cri } : null,
+                  product?.website     ? { k: 'Website',        v: product.website } : null,
+                ].filter((r): r is { k: string; v: string } => !!r && !!r.v).map(r => (
                   <div key={r.k} className="flex items-center px-4 py-3 gap-3">
-                    <span className="text-xs text-gray-dark font-pop w-24">{r.k}</span>
+                    <span className="text-xs text-gray-dark font-pop w-24 flex-shrink-0">{r.k}</span>
                     <span className="text-sm font-semibold text-foreground font-bai">{r.v}</span>
                   </div>
                 ))}
               </div>
+
+              {product?.hero_description && (
+                <p className="mt-4 text-sm text-gray-text font-pop leading-relaxed">{product.hero_description}</p>
+              )}
+
+              {product?.gallery_images && product.gallery_images.length > 1 && (
+                <div className="mt-5 grid grid-cols-4 gap-2">
+                  {product.gallery_images.map((src, i) => (
+                    <div key={i} className="aspect-square rounded-lg overflow-hidden bg-gray relative">
+                      <Image src={src} alt={`${product.Codes} ${i + 1}`} fill sizes="100px" className="object-cover" />
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {product?.ImageLink && product.ImageLink.length > 2 && (
                 <a href={product.ImageLink} target="_blank" rel="noreferrer"

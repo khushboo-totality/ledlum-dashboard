@@ -19,7 +19,8 @@ interface ProductCardProps {
 export default function ProductCard({ product, index, onClick, onEdit, onDelete, hasDetail, onQuickAdd }: ProductCardProps) {
   const { can } = useAuth()
   const [imgError, setImgError] = useState(false)
-  const imgUrl = getImageUrl(product.ImageLink ?? '')
+  const displayCode = product.model ?? product.Codes
+  const imgUrl = getImageUrl(product.hero_image ?? product.ImageLink ?? '')
   const delay  = `${(index % 24) * 0.03}s`
   const showAdminActions = can('edit') || can('delete')
 
@@ -33,7 +34,7 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
         {imgUrl && !imgError ? (
           <Image
             src={imgUrl}
-            alt={product.Codes}
+            alt={displayCode}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             className="pointer-events-none object-cover transition-transform duration-500 group-hover:scale-[1.05]"
@@ -73,7 +74,7 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
       </div>
 
       <div className="px-4 pb-3 pt-3">
-        <div className="truncate text-sm font-extrabold tracking-wide text-foreground font-bai">{product.Codes}</div>
+        <div className="truncate text-sm font-extrabold tracking-wide text-foreground font-bai">{displayCode}</div>
         <div className="mt-1 flex items-center justify-between gap-2">
           <div className="min-w-0 truncate text-xs text-gray-text font-pop">{product.Category}</div>
           <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray text-gray-text transition-colors group-hover:bg-primary group-hover:text-white">
