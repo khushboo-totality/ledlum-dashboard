@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 
 interface VendorRecord {
   username: string
@@ -94,16 +95,16 @@ export default function VendorManager({ isOpen, onClose }: VendorManagerProps) {
   // ── KEY FIX: render nothing at all when closed ──
   if (!isOpen) return null
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop — clicks close the modal */}
       <div
-        className="fixed inset-0 z-50 bg-black/40"
+        className="fixed inset-0 z-[70] bg-black/40"
         onClick={onClose}
       />
 
       {/* Modal — centred, above backdrop, stops click propagation */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-5 pointer-events-none">
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-5 pointer-events-none">
         <div
           className="bg-white rounded-2xl w-full max-w-2xl shadow-modal pointer-events-auto flex flex-col max-h-[85vh] overflow-hidden animate-fade-in"
           onClick={e => e.stopPropagation()}
@@ -359,6 +360,7 @@ export default function VendorManager({ isOpen, onClose }: VendorManagerProps) {
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
