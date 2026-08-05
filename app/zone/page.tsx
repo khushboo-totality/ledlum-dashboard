@@ -1,18 +1,14 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
-import { useAuth } from '@/context/AuthContext'
-import AuthScreen from '@/components/AuthScreen'
 import CatalogPage from '@/components/CatalogPage'
 
 function ZoneIndexInner() {
-  const { user } = useAuth()
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => { setHydrated(true) }, [])
 
   if (!hydrated) return null
-  if (!user) return <AuthScreen />
 
   return <CatalogPage initialMode="zone" />
 }

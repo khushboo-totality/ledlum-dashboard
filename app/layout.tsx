@@ -3,6 +3,7 @@ import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 import { ToastProvider } from '@/context/ToastContext'
 import { CartProvider } from '@/context/CartContext'
+import { ZonesProvider } from '@/context/ZonesContext'
 
 export const metadata: Metadata = {
   title: 'LEDLUM — Product Catalog',
@@ -14,11 +15,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className="font-bai bg-white text-foreground">
         <AuthProvider>
-          <ToastProvider>
-            <CartProvider>
-              {children}
-            </CartProvider>
-          </ToastProvider>
+          <ZonesProvider>
+            <ToastProvider>
+              <CartProvider>
+                {children}
+              </CartProvider>
+            </ToastProvider>
+          </ZonesProvider>
         </AuthProvider>
       </body>
     </html>

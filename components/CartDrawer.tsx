@@ -4,12 +4,13 @@ import { useState } from 'react'
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
-import { getZoneById } from '@/lib/zones'
+import { useZones } from '@/context/ZonesContext'
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQty, clearCart } = useCart()
   const { user, can } = useAuth()
   const { toast } = useToast()
+  const { getZoneById } = useZones()
   const [sending, setSending] = useState(false)
   const [sent, setSent]       = useState(false)
 

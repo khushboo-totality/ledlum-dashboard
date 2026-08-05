@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
-import { ZONES, getZonePath } from '@/lib/zones'
+import { getZonePath } from '@/lib/zones'
+import { useZones } from '@/context/ZonesContext'
 import LedlumLogo from './LedlumLogo'
 import CartDrawer from './CartDrawer'
 
@@ -26,6 +27,7 @@ export const AVATAR_STYLES: Record<string, string> = {
 export default function ZoneChooser() {
   const { user, logout, can } = useAuth()
   const { total, openCart, isPulsing } = useCart()
+  const { zones } = useZones()
   const router = useRouter()
 
   const selectZone = (zoneId: string) => {
@@ -117,7 +119,7 @@ export default function ZoneChooser() {
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-          {ZONES.map(zone => (
+          {zones.map(zone => (
             <button
               key={zone.id}
               onClick={() => selectZone(zone.id)}
