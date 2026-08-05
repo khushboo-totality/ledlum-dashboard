@@ -74,6 +74,73 @@ const COLS = [
   { key: "total", label: "Total (₹)", className: "w-[116px] text-right" },
 ] as const;
 
+type ColKey = (typeof COLS)[number]["key"];
+
+// Always shown regardless of data — everything else only appears if at
+// least one row actually has a value for it (so a single-product download
+// only shows the columns that product's data actually populates).
+const ALWAYS_VISIBLE_COLS = new Set<ColKey>(["slNo", "description", "qty", "unit"]);
+
+function hasValue(v: unknown): boolean {
+  if (v === undefined || v === null) return false;
+  if (typeof v === "string") return v.trim() !== "" && v.trim() !== "—" && v.trim() !== "-";
+  if (typeof v === "number") return v !== 0;
+  return true;
+}
+
+function getVisibleCols(rows: BoqRow[]) {
+  return COLS.filter(
+    (c) => ALWAYS_VISIBLE_COLS.has(c.key) || rows.some((r) => hasValue(r[c.key as keyof BoqRow]))
+  );
+}
+
+function BoqCell({ colKey, row }: { colKey: ColKey; row: BoqRow }) {
+  switch (colKey) {
+    case "slNo":
+      return <td className="px-3 py-6 text-[#555] first:pl-10">{row.slNo}</td>;
+    case "description":
+      return <td className="px-3 py-6 font-semibold uppercase tracking-[0.02em]">{row.description}</td>;
+    case "image":
+      return (
+        <td className="px-3 py-6">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden border border-black/[0.06] bg-white">
+            {row.image ? (
+              <img src={row.image} alt={row.description} className="h-full w-full object-contain" />
+            ) : (
+              <span className="text-[10px] uppercase tracking-wide text-black/25">Image</span>
+            )}
+          </div>
+        </td>
+      );
+    case "type":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.type}</td>;
+    case "code":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.code}</td>;
+    case "watt":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.watt}</td>;
+    case "beam":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.beam}</td>;
+    case "cct":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.cct}</td>;
+    case "auto":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.auto}</td>;
+    case "color":
+      return <td className="px-3 py-6 text-center uppercase text-[#555]">{row.color}</td>;
+    case "qty":
+      return <td className="px-3 py-6 text-center last:pr-10">{row.qty}</td>;
+    case "unit":
+      return <td className="px-3 py-6 text-center text-[#555] last:pr-10">{row.unit}</td>;
+    case "mrp":
+      return <td className="px-3 py-6 text-right text-[#555]">{inr(row.mrp)}</td>;
+    case "disc":
+      return <td className="px-3 py-6 text-right font-semibold text-[#d4622a]">{row.disc}%</td>;
+    case "net":
+      return <td className="px-3 py-6 text-right text-[#555]">{inr(row.net)}</td>;
+    case "total":
+      return <td className="px-3 py-6 pr-10 text-right font-bold last:pr-10">{inr(row.total)}</td>;
+  }
+}
+
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline gap-3">
@@ -132,6 +199,7 @@ function Masthead({ meta }: { meta: BoqMeta }) {
 function BoqPage({
   meta,
   rows,
+  visibleCols,
   pageNo,
   pageCount,
   isLast,
@@ -140,6 +208,7 @@ function BoqPage({
 }: {
   meta: BoqMeta;
   rows: BoqRow[];
+  visibleCols: typeof COLS[number][];
   pageNo: number;
   pageCount: number;
   isLast: boolean;
@@ -159,7 +228,7 @@ function BoqPage({
       <table className="w-full border-collapse text-[12.5px]">
         <thead>
           <tr className="bg-[#12100f]">
-            {COLS.map((c) => (
+            {visibleCols.map((c) => (
               <th
                 key={c.key}
                 className={`${c.className} whitespace-nowrap px-3 py-4 text-[11.5px] font-medium uppercase tracking-[0.06em] text-white first:pl-10 last:pr-10`}
@@ -175,34 +244,9 @@ function BoqPage({
               key={r.slNo}
               className={`border-b border-black/10 ${(startIndex + i) % 2 ? "bg-[#f7f7f7]" : "bg-white"}`}
             >
-              <td className="px-3 py-6 pl-10 text-[#555]">{r.slNo}</td>
-              <td className="px-3 py-6 font-semibold uppercase tracking-[0.02em]">{r.description}</td>
-              <td className="px-3 py-6">
-                <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden border border-black/[0.06] bg-white">
-                  {r.image ? (
-                    <img
-                      src={r.image}
-                      alt={r.description}
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <span className="text-[10px] uppercase tracking-wide text-black/25">Image</span>
-                  )}
-                </div>
-              </td>
-              <td className="px-3 py-6 text-center text-[#555]">{r.type}</td>
-              <td className="px-3 py-6 text-center text-[#555]">{r.code}</td>
-              <td className="px-3 py-6 text-center text-[#555]">{r.watt}</td>
-              <td className="px-3 py-6 text-center text-[#555]">{r.beam}</td>
-              <td className="px-3 py-6 text-center text-[#555]">{r.cct}</td>
-              <td className="px-3 py-6 text-center text-[#555]">{r.auto}</td>
-              <td className="px-3 py-6 text-center uppercase text-[#555]">{r.color}</td>
-              <td className="px-3 py-6 text-center">{r.qty}</td>
-              <td className="px-3 py-6 text-center text-[#555]">{r.unit}</td>
-              <td className="px-3 py-6 text-right text-[#555]">{inr(r.mrp)}</td>
-              <td className="px-3 py-6 text-right font-semibold text-[#d4622a]">{r.disc}%</td>
-              <td className="px-3 py-6 text-right text-[#555]">{inr(r.net)}</td>
-              <td className="px-3 py-6 pr-10 text-right font-bold">{inr(r.total)}</td>
+              {visibleCols.map((c) => (
+                <BoqCell key={c.key} colKey={c.key} row={r} />
+              ))}
             </tr>
           ))}
         </tbody>
@@ -294,6 +338,10 @@ export default function BOQDocument({
   for (let i = 0; i < rows.length; i += rowsPerPage) pages.push(rows.slice(i, i + rowsPerPage));
   if (!pages.length) pages.push([]);
 
+  // Computed once across all rows so the column set stays consistent across
+  // pages of a multi-page document, not just what a single page happens to have.
+  const visibleCols = getVisibleCols(rows);
+
   return (
     <div className="overflow-x-auto bg-white">
       <div className="min-w-[1600px] font-[Poppins,system-ui,sans-serif] text-[#1a1a1a] antialiased">
@@ -302,6 +350,7 @@ export default function BOQDocument({
             key={i}
             meta={meta}
             rows={pageRows}
+            visibleCols={visibleCols}
             pageNo={i + 1}
             pageCount={pages.length}
             isLast={i === pages.length - 1}

@@ -6,6 +6,7 @@ import { GUEST_USER, getPermissions, validateLogin } from '@/lib/auth'
 
 interface AuthContextType {
   user: User | null
+  loading: boolean
   permissions: Permissions
   login: (username: string, password: string) => boolean
   loginAsGuest: () => void
@@ -21,7 +22,8 @@ const NULL_PERMS: Permissions = {
 const AUTH_KEY = 'ledlum_auth_user'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser]       = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
   // Restore session from localStorage on mount
   useEffect(() => {
@@ -29,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const saved = localStorage.getItem(AUTH_KEY)
       if (saved) setUser(JSON.parse(saved) as User)
     } catch {}
+    setLoading(false)
   }, [])
 
   const permissions = user ? getPermissions(user.role as Role) : NULL_PERMS
@@ -54,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const can = useCallback((action: keyof Permissions) => permissions[action], [permissions])
 
   return (
-    <AuthContext.Provider value={{ user, permissions, login, loginAsGuest, logout, can }}>
+    <AuthContext.Provider value={{ user, loading, permissions, login, loginAsGuest, logout, can }}>
       {children}
     </AuthContext.Provider>
   )

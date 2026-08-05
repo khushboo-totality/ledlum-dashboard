@@ -156,42 +156,156 @@ async function setProductZones(productId: number, zoneSlugs: string[]): Promise<
   if (error) throw new Error(`Failed to set product zones: ${error.message}`)
 }
 
+interface ZoneProductRow {
+  id: number
+  codes: string
+  category: string
+  image_link: string
+  source: string
+  zone: string
+}
+
+/**
+ * Legacy rows from ledlum_zone_products whose `codes` don't match any
+ * ledlum_products.model — i.e. never made it into the real catalog. Shown
+ * read-only in the zone dashboard so zones aren't silently empty; excluded
+ * once a matching real product (and thus a ledlum_product_zone link) exists,
+ * to avoid showing the same item twice.
+ */
+async function getUnmatchedZoneProducts(
+  zoneSlug: string,
+  filters?: { search?: string; category?: string }
+): Promise<Product[]> {
+  const { data, error } = await supabaseAdmin
+    .from('ledlum_zone_products')
+    .select('id, codes, category, image_link, source, zone')
+    .eq('zone', zoneSlug)
+  if (error) throw new Error(`Failed to load legacy zone products: ${error.message}`)
+
+  const rows = (data ?? []) as ZoneProductRow[]
+  if (rows.length === 0) return []
+
+  const codes = Array.from(new Set(rows.map(r => r.codes)))
+  const matchedCodes = new Set<string>()
+  for (const idBatch of chunk(codes, ID_CHUNK_SIZE)) {
+    const { data: matched, error: matchError } = await supabaseAdmin
+      .from(TABLE).select('model').in('model', idBatch)
+    if (matchError) throw new Error(`Failed to check legacy zone products: ${matchError.message}`)
+    for (const m of matched ?? []) if (m.model) matchedCodes.add(m.model)
+  }
+
+  let unmatched = rows.filter(r => !matchedCodes.has(r.codes))
+  if (filters?.category) unmatched = unmatched.filter(r => r.category === filters.category)
+  if (filters?.search) {
+    const s = filters.search.toLowerCase()
+    unmatched = unmatched.filter(r => r.codes.toLowerCase().includes(s) || r.category.toLowerCase().includes(s))
+  }
+
+  return unmatched.map(r => ({
+    id: `zp-${r.id}`,
+    Codes: r.codes,
+    Category: r.category,
+    ImageLink: r.image_link,
+    imageUrl: r.image_link,
+    source: (r.source === 'external' ? 'external' : 'internal') as 'internal' | 'external',
+    zone: r.zone,
+    zones: [r.zone],
+    readOnly: true,
+  }))
+}
+
 export interface ProductFilters {
   zone?: string
   search?: string
+  /** Zone-dashboard "Category" filter — actually filters on group_name. */
   category?: string
   source?: string
+  /** Product-type dashboard's 3-level hierarchy: collection -> group_name -> category. */
+  collection?: string
+  groupName?: string
+  productType?: string
+  /** When set, paginates the result instead of returning everything. */
+  limit?: number
+  offset?: number
 }
 
-export async function listProducts(filters?: ProductFilters): Promise<Product[]> {
-  if (filters?.source === 'external') return [] // no external-sourced products in Supabase
+export interface ProductPage {
+  items: Product[]
+  hasMore: boolean
+}
+
+export async function listProducts(filters?: ProductFilters): Promise<ProductPage> {
+  if (filters?.source === 'external') return { items: [], hasMore: false } // no external-sourced products in Supabase
+
+  const { limit, offset = 0 } = filters ?? {}
 
   let productIdFilter: number[] | null = null
   if (filters?.zone) {
     productIdFilter = await getProductIdsForZone(filters.zone)
-    if (productIdFilter === null || productIdFilter.length === 0) return []
+    if (productIdFilter === null) return { items: [], hasMore: false }
   }
 
-  // Bounded by an .in() id list (<=1000 rows possible per id) → chunk it.
-  // Unbounded (no zone filter) → a single "chunk" that still needs .range() paging.
-  const idChunks = productIdFilter ? chunk(productIdFilter, ID_CHUNK_SIZE) : [null]
   const rows: ProductRow[] = []
-  for (const idBatch of idChunks) {
-    const pageRows = await selectAllPages<ProductRow>((from, to) => {
-      let q = supabaseAdmin.from(TABLE).select('*').order('id', { ascending: false })
-      if (idBatch) q = q.in('id', idBatch)
+  let dbHasMore = false
+  // Skip the real-product query entirely when zone-filtered with zero links
+  // — still fall through to append unmatched legacy rows below.
+  if (!filters?.zone || (productIdFilter && productIdFilter.length > 0)) {
+    const applyFilters = (q: any) => {
       if (filters?.category) q = q.eq('group_name', filters.category)
+      if (filters?.collection) q = q.eq('collection', filters.collection)
+      if (filters?.groupName) q = q.eq('group_name', filters.groupName)
+      if (filters?.productType) q = q.eq('category', filters.productType)
       if (filters?.search) {
         const s = filters.search.replace(/[%_,]/g, ' ').trim()
         if (s) q = q.or(`model.ilike.%${s}%,group_name.ilike.%${s}%`)
       }
-      return q.range(from, to)
-    })
-    rows.push(...pageRows)
+      return q
+    }
+
+    if (!filters?.zone && limit !== undefined) {
+      // Unfiltered ("All Zones") + paginated: a real DB-level page, fetching
+      // one extra row to know whether there's more without a separate count query.
+      let q = supabaseAdmin.from(TABLE).select('*').order('id', { ascending: false })
+      q = applyFilters(q)
+      const { data, error } = await q.range(offset, offset + limit)
+      if (error) throw new Error(error.message)
+      const pageRows = (data ?? []) as ProductRow[]
+      dbHasMore = pageRows.length > limit
+      rows.push(...pageRows.slice(0, limit))
+    } else {
+      // Zone-filtered (small id-list) or unpaginated — fetch the full set;
+      // zone-filtered results are cheap (tens of rows), and callers that
+      // don't pass `limit` (getStats/getCategories/sync) need everything.
+      // Bounded by an .in() id list (<=1000 rows possible per id) → chunk it.
+      const idChunks = productIdFilter ? chunk(productIdFilter, ID_CHUNK_SIZE) : [null]
+      for (const idBatch of idChunks) {
+        const pageRows = await selectAllPages<ProductRow>((from, to) => {
+          let q = supabaseAdmin.from(TABLE).select('*').order('id', { ascending: false })
+          if (idBatch) q = q.in('id', idBatch)
+          q = applyFilters(q)
+          return q.range(from, to)
+        })
+        rows.push(...pageRows)
+      }
+    }
   }
 
   const zoneMap = await getZoneSlugsForProductIds(rows.map(r => r.id))
-  return rows.map(r => mapRowToProduct(r, zoneMap.get(r.id) ?? []))
+  let products = rows.map(r => mapRowToProduct(r, zoneMap.get(r.id) ?? []))
+
+  if (filters?.zone) {
+    const legacy = await getUnmatchedZoneProducts(filters.zone, { search: filters.search, category: filters.category })
+    products.push(...legacy)
+  }
+
+  let hasMore = dbHasMore
+  if (filters?.zone && limit !== undefined) {
+    // In-memory pagination over the combined (real + legacy) list.
+    hasMore = offset + limit < products.length
+    products = products.slice(offset, offset + limit)
+  }
+
+  return { items: products, hasMore }
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
@@ -300,24 +414,80 @@ export async function getCategories(zone?: string): Promise<string[]> {
   let productIdFilter: number[] | null = null
   if (zone) {
     productIdFilter = await getProductIdsForZone(zone)
-    if (productIdFilter === null || productIdFilter.length === 0) return []
+    if (productIdFilter === null) return []
   }
 
-  const idChunks = productIdFilter ? chunk(productIdFilter, ID_CHUNK_SIZE) : [null]
   const cats = new Set<string>()
-  for (const idBatch of idChunks) {
-    const rows = await selectAllPages<{ group_name: string | null }>((from, to) => {
-      let q = supabaseAdmin.from(TABLE).select('group_name')
-      if (idBatch) q = q.in('id', idBatch)
-      return q.range(from, to)
-    })
-    for (const row of rows) if (row.group_name) cats.add(row.group_name)
+  if (!zone || (productIdFilter && productIdFilter.length > 0)) {
+    const idChunks = productIdFilter ? chunk(productIdFilter, ID_CHUNK_SIZE) : [null]
+    for (const idBatch of idChunks) {
+      const rows = await selectAllPages<{ group_name: string | null }>((from, to) => {
+        let q = supabaseAdmin.from(TABLE).select('group_name')
+        if (idBatch) q = q.in('id', idBatch)
+        return q.range(from, to)
+      })
+      for (const row of rows) if (row.group_name) cats.add(row.group_name)
+    }
   }
+
+  if (zone) {
+    const legacy = await getUnmatchedZoneProducts(zone)
+    for (const p of legacy) cats.add(p.Category)
+  }
+
   return Array.from(cats)
 }
 
+export interface ProductTypeNode { name: string; count: number }
+export interface GroupNameNode { name: string; count: number; productTypes: ProductTypeNode[] }
+export interface CollectionNode { name: string; label: string; count: number; groupNames: GroupNameNode[] }
+
+/**
+ * Real 3-level hierarchy for the "Browse by Product Type" dashboard, derived
+ * live from ledlum_products: collection -> group_name -> category. Replaces
+ * the old hardcoded lib/productTaxonomy.ts mock tree.
+ */
+export async function getProductTaxonomy(): Promise<CollectionNode[]> {
+  const rows = await selectAllPages<{ collection: string | null; group_name: string | null; category: string | null }>(
+    (from, to) => supabaseAdmin.from(TABLE).select('collection, group_name, category').range(from, to)
+  )
+
+  const collections = new Map<string, Map<string, Map<string, number>>>()
+  for (const row of rows) {
+    const collection = row.collection || 'Uncategorized'
+    const groupName = row.group_name || 'Uncategorized'
+    const productType = row.category || null
+
+    if (!collections.has(collection)) collections.set(collection, new Map())
+    const groups = collections.get(collection)!
+    if (!groups.has(groupName)) groups.set(groupName, new Map())
+    const types = groups.get(groupName)!
+    if (productType) types.set(productType, (types.get(productType) ?? 0) + 1)
+    else types.set('__none__', (types.get('__none__') ?? 0) + 1) // tracked for group count only, not exposed as a chip
+  }
+
+  return Array.from(collections.entries()).map(([name, groups]) => {
+    const groupNames: GroupNameNode[] = Array.from(groups.entries()).map(([groupName, types]) => {
+      const productTypes = Array.from(types.entries())
+        .filter(([typeName]) => typeName !== '__none__')
+        .map(([typeName, count]) => ({ name: typeName, count }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+      const count = Array.from(types.values()).reduce((sum, c) => sum + c, 0)
+      return { name: groupName, count, productTypes }
+    }).sort((a, b) => b.count - a.count)
+
+    const count = groupNames.reduce((sum, g) => sum + g.count, 0)
+    return {
+      name,
+      label: name.charAt(0).toUpperCase() + name.slice(1),
+      count,
+      groupNames,
+    }
+  }).sort((a, b) => b.count - a.count)
+}
+
 export async function getStats(zone?: string): Promise<Stats> {
-  const products = await listProducts(zone ? { zone } : undefined)
+  const { items: products } = await listProducts(zone ? { zone } : undefined)
   return {
     total: products.length,
     withImage: products.filter(p => p.ImageLink && p.ImageLink.length > 2).length,

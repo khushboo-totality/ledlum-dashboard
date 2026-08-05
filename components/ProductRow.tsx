@@ -49,6 +49,11 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
             Config
           </span>
         )}
+        {product.readOnly && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide font-pop bg-amber-100 text-amber-700 border border-amber-300 flex-shrink-0">
+            Unlinked
+          </span>
+        )}
       </div>
 
       <div className="text-sm text-gray-text font-pop flex-1">{product.Category}</div>
@@ -65,13 +70,13 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
           className="px-3 py-1.5 text-xs font-semibold font-bai border border-gray-mid rounded-lg text-gray-text hover:border-primary hover:text-primary transition-colors">
           {can('cart') ? '+ Quote' : 'View'}
         </button>
-        {can('edit') && (
+        {can('edit') && !product.readOnly && (
           <button onClick={onEdit}
             className="px-3 py-1.5 text-xs font-semibold font-bai border border-gray-mid rounded-lg text-gray-text hover:border-primary hover:text-primary transition-colors">
             Edit
           </button>
         )}
-        {can('delete') && (
+        {can('delete') && !product.readOnly && (
           <button onClick={onDelete}
             className="px-3 py-1.5 text-xs font-semibold font-bai border border-primary/30 rounded-lg text-primary hover:bg-primary/5 transition-colors">
             Del

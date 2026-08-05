@@ -5,6 +5,8 @@ import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { useZones } from '@/context/ZonesContext'
+import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
+import { downloadBoqPdf } from '@/lib/exportBoqPdf'
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQty, clearCart } = useCart()
@@ -13,6 +15,7 @@ export default function CartDrawer() {
   const { getZoneById } = useZones()
   const [sending, setSending] = useState(false)
   const [sent, setSent]       = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const totalQty = items.reduce((s, i) => s + i.quantity, 0)
 
@@ -54,69 +57,57 @@ export default function CartDrawer() {
     return header + rows + footer
   }
 
-  const handleDownloadPDF = () => {
-    if (items.length === 0) return
-    const rows = items.map((item, i) => {
-      const context = item.browseMode === 'product'
-        ? `Category: ${itemContext(item)}`
-        : `Zone: ${getZoneById(item.zone)?.label ?? item.zone}`
-      const specs = Object.entries(item.selection)
-        .filter(([, v]) => v)
-        .map(([k, v]) => `<span style="background:#f3f4f6;border-radius:4px;padding:2px 8px;font-size:11px;margin-right:4px">${k}: <b>${v}</b></span>`)
-        .join('')
-      return `
-        <tr style="border-bottom:1px solid #eee">
-          <td style="padding:10px 12px;font-size:13px;color:#aaa;text-align:center;vertical-align:top">${i + 1}</td>
-          <td style="padding:10px 12px">
-            <div style="font-weight:700;font-size:14px;color:#171717">${item.productName}</div>
-            <div style="font-size:11px;color:#888;margin-top:2px">${context}</div>
-            ${specs ? `<div style="margin-top:6px">${specs}</div>` : ''}
-          </td>
-          <td style="padding:10px 12px;text-align:center;font-weight:700;font-size:14px">${item.quantity}</td>
-        </tr>`
-    }).join('')
+  // Best-effort pull of a spec value out of the product's free-form config
+  // selection (keys are whatever the product's config options were named).
+  const specValue = (selection: Record<string, string>, ...keywords: string[]) => {
+    for (const [k, v] of Object.entries(selection)) {
+      if (v && keywords.some(kw => k.toLowerCase().includes(kw))) return v
+    }
+    return '—'
+  }
 
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Quote — LEDLUM</title>
-<style>
-  body{font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:32px;color:#171717;background:#fff}
-  .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:16px;border-bottom:3px solid #9a8c66}
-  .brand{font-size:24px;font-weight:800;letter-spacing:.05em;color:#9a8c66}
-  .meta{font-size:12px;color:#888;line-height:1.8}
-  table{width:100%;border-collapse:collapse;margin-top:8px;border:1px solid #eee;border-radius:8px;overflow:hidden}
-  th{background:#f8f7f4;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#666;padding:10px 12px;text-align:left}
-  .footer{margin-top:32px;font-size:10px;color:#bbb;text-align:center;border-top:1px solid #eee;padding-top:12px}
-  @media print{body{padding:16px}}
-</style></head>
-<body>
-  <div class="hdr">
-    <div><div class="brand">LEDLUM</div><div style="font-size:12px;color:#aaa;margin-top:2px">Quote Request</div></div>
-    <div class="meta">
-      <div><b>Name:</b> ${user?.name ?? '—'}</div>
-      ${user?.company ? `<div><b>Company:</b> ${user.company}</div>` : ''}
-      <div><b>Date:</b> ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-    </div>
-  </div>
-  <table>
-    <thead><tr>
-      <th style="width:36px;text-align:center">#</th>
-      <th>Product</th>
-      <th style="width:80px;text-align:center">Qty</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div style="margin-top:16px;text-align:right;font-size:13px;font-weight:700">
-    Total items: ${items.reduce((s, i) => s + i.quantity, 0)}
-  </div>
-  <div class="footer">LEDLUM — Confidential · For trade use only · Please confirm pricing before processing</div>
-</body></html>`
+  const handleDownloadPDF = async () => {
+    if (items.length === 0 || downloadingPdf) return
 
-    const w = window.open('', '_blank', 'width=780,height=1000')
-    if (!w) { toast('Please allow popups to download PDF', 'error'); return }
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => w.print(), 400)
+    const rows: BoqRow[] = items.map((item, i) => ({
+      slNo: i + 1,
+      description: item.productName,
+      image: item.productImage,
+      type: item.productTypeName ?? item.productCategory ?? '—',
+      code: item.productCode,
+      watt: specValue(item.selection, 'watt'),
+      beam: specValue(item.selection, 'beam'),
+      cct: specValue(item.selection, 'cct', 'colour temp', 'color temp'),
+      auto: specValue(item.selection, 'auto', 'switch', 'driver'),
+      color: specValue(item.selection, 'color', 'colour', 'finish'),
+      qty: item.quantity,
+      unit: "NO'S",
+      // No pricing source yet in this app's data model — left at 0 until one exists.
+      mrp: 0,
+      disc: 0,
+      net: 0,
+      total: 0,
+    }))
+
+    // TODO: replace with real per-quote project details once available —
+    // SAMPLE_META is a placeholder; only date/preparedBy/dealerName are
+    // filled in from the logged-in vendor.
+    const meta: BoqMeta = {
+      ...SAMPLE_META,
+      date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      preparedBy: user?.name ?? SAMPLE_META.preparedBy,
+      dealerName: user?.company ?? user?.name ?? SAMPLE_META.dealerName,
+    }
+
+    setDownloadingPdf(true)
+    try {
+      await downloadBoqPdf(meta, rows, `LEDLUM-Quote-${new Date().toISOString().slice(0, 10)}.pdf`)
+    } catch (err) {
+      console.error('[CartDrawer] PDF export failed:', err)
+      toast('Failed to generate PDF', 'error')
+    } finally {
+      setDownloadingPdf(false)
+    }
   }
 
   const handleSendQuote = async () => {
@@ -267,14 +258,18 @@ export default function CartDrawer() {
                 Copy
               </button>
               {can('download') && (
-                <button onClick={handleDownloadPDF}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-primary/30 rounded-lg text-sm font-semibold font-bai text-primary hover:bg-primary/5 transition-colors">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                  </svg>
-                  Download PDF
+                <button onClick={handleDownloadPDF} disabled={downloadingPdf}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-primary/30 rounded-lg text-sm font-semibold font-bai text-primary hover:bg-primary/5 disabled:opacity-60 transition-colors">
+                  {downloadingPdf ? (
+                    <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                  )}
+                  {downloadingPdf ? 'Generating…' : 'Download PDF'}
                 </button>
               )}
               <button onClick={() => { if (confirm('Clear all items from quote?')) clearCart() }}
