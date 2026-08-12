@@ -5,12 +5,13 @@ import { useAuth } from '@/context/AuthContext'
 import AuthScreen from '@/components/AuthScreen'
 import CatalogPage from '@/components/CatalogPage'
 import BrowseChooser from '@/components/BrowseChooser'
+import PageSpinner from '@/components/PageSpinner'
 import type { BrowseMode } from '@/types'
 
 const CHOOSER_KEY = 'ledlum_browse_chosen'
 
 function PageInner() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [browseMode, setBrowseMode] = useState<BrowseMode | null>(null)
   const [hydrated, setHydrated] = useState(false)
 
@@ -39,8 +40,9 @@ function PageInner() {
     }
   }, [user, hydrated])
 
-  // Before hydration — render nothing (avoid SSR mismatch)
-  if (!hydrated) return null
+  // Before hydration, or before we know if a session was restored — show a
+  // spinner instead of a blank flash (and instead of flashing AuthScreen).
+  if (!hydrated || authLoading) return <PageSpinner />
 
   if (!user) return <AuthScreen />
 

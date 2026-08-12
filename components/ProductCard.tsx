@@ -22,7 +22,7 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
   const displayCode = product.model ?? product.Codes
   const imgUrl = getImageUrl(product.hero_image ?? product.ImageLink ?? '')
   const delay  = `${(index % 24) * 0.03}s`
-  const showAdminActions = can('edit') || can('delete')
+  const showAdminActions = (can('edit') || can('delete')) && !product.readOnly
 
   return (
     <div
@@ -60,6 +60,11 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
           {hasDetail && (
             <span className="rounded-full bg-primary px-2.5 py-1 text-[9px] font-bold uppercase text-white shadow-sm font-pop">
               Configure
+            </span>
+          )}
+          {product.readOnly && (
+            <span className="rounded-full bg-amber-500/90 px-2.5 py-1 text-[9px] font-bold uppercase text-white shadow-sm font-pop">
+              Unlinked
             </span>
           )}
         </div>

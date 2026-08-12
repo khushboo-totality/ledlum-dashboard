@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import type { Product, ProductFormData, BrowseMode } from '@/types'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
@@ -132,6 +132,68 @@ function ModeSwitcher({
   )
 }
 
+// ── Filter row: sticky label + carousel of pills ────────────────────────
+// Used for all three ProductTypePanel levels (Category/Subcategory/Product
+// Type). The label stays pinned to the left edge while the pills scroll as
+// a horizontal carousel, with prev/next arrows that fade in once there's
+// more to scroll in that direction.
+function FilterRow({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    updateScrollState()
+    const el = scrollRef.current
+    if (!el) return
+    el.addEventListener('scroll', updateScrollState, { passive: true })
+    const ro = new ResizeObserver(updateScrollState)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', updateScrollState); ro.disconnect() }
+  }, [updateScrollState, children])
+
+  const scrollByAmount = (dir: 1 | -1) => scrollRef.current?.scrollBy({ left: dir * 220, behavior: 'smooth' })
+
+  return (
+    <div className={`flex items-center gap-1.5 px-4 sm:px-6 lg:px-8 ${className}`}>
+      <span className="sticky left-0 z-10 flex-shrink-0 whitespace-nowrap bg-white/90 py-1 pr-2 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop backdrop-blur-sm">
+        {label}
+      </span>
+
+      <button
+        onClick={() => scrollByAmount(-1)}
+        aria-label={`Scroll ${label} left`}
+        className={`flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full border border-gray-mid bg-white text-gray-dark shadow-sm transition-opacity hover:text-primary hover:border-primary ${
+          canScrollLeft ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+
+      <div ref={scrollRef} className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto scroll-smooth scrollbar-hide">
+        {children}
+      </div>
+
+      <button
+        onClick={() => scrollByAmount(1)}
+        aria-label={`Scroll ${label} right`}
+        className={`flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full border border-gray-mid bg-white text-gray-dark shadow-sm transition-opacity hover:text-primary hover:border-primary ${
+          canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  )
+}
+
 // ── Product Type Filter Panel ──────────────────────────────────────────
 // Data-driven from the live Supabase catalogue (no fictional taxonomy):
 //   Level 1 — Collection (indoor / outdoor, from ledlum_products.collection)
@@ -163,6 +225,9 @@ function ProductTypePanel({
   viewLayout: ViewLayout
   onViewLayout: (v: ViewLayout) => void
 }) {
+  const activeCollectionNode = taxonomy.find(c => c.name === activeCollection) ?? null
+  const activeGroupNode = activeCollectionNode?.groupNames.find(g => g.name === activeGroupName) ?? null
+
   return (
     <div className="border-b border-white/80 bg-white/75 backdrop-blur">
       {/* ── Level 1: Collection row ── */}
@@ -183,7 +248,7 @@ function ProductTypePanel({
             {collectionLabel(c)}
           </button>
         ))}
-      </div>
+      </FilterRow>
 
       {/* ── Level 2: Category row (real group_name values) ── */}
       {groupCounts.length > 0 && (
@@ -220,7 +285,7 @@ function ProductTypePanel({
               </span>
             </button>
           ))}
-        </div>
+        </FilterRow>
       )}
 
       {/* ── Search + view controls ── */}
@@ -297,13 +362,57 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const [viewLayout, setViewLayout] = useState<ViewLayout>('grid')
   const pathname = usePathname()
 
+  // ── Sticky filter stack offset ────────────────────────────────────
+  // Measured (not hardcoded) so it stays correct whether Header or ZoneNav's
+  // two-bar stack is showing, and across breakpoints where they wrap taller.
+  const headerRef = useRef<HTMLDivElement>(null)
+  const [headerHeight, setHeaderHeight] = useState(0)
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const update = () => setHeaderHeight(el.offsetHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    window.addEventListener('resize', update)
+    return () => { ro.disconnect(); window.removeEventListener('resize', update) }
+  }, [browseMode])
+
+  // ── Scroll-to-top floating button ─────────────────────────────────
+  const [showScrollTop, setShowScrollTop] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 480)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   // ── Zone mode state ─────────────────────────────────────────────
-  const { products, categories, createProduct, updateProduct, deleteProduct } =
-    useProducts(activeZone || undefined)
+  const {
+    products, loading: zoneLoading, loadingMore, hasMore, loadMore,
+    categories, fetchProducts, createProduct, updateProduct, deleteProduct,
+  } = useProducts(activeZone || undefined)
   const [search, setSearch]         = useState('')
   const [category, setCategory]     = useState('')
   const [source, setSource]         = useState('')
   const [zoneFilter, setZoneFilter] = useState('')  // admin zone filter for all-zones view
+
+  // Re-fetch (from page 1) whenever a zone-mode filter changes — server-side
+  // filtering + pagination, replacing the old client-only useMemo filter.
+  useEffect(() => {
+    if (browseMode !== 'zone') return
+    const handle = setTimeout(() => {
+      fetchProducts({
+        search: search || undefined,
+        category: category || undefined,
+        source: source || undefined,
+        zone: zoneFilter || undefined,
+      })
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, search ? 300 : 0) // debounce free-text search only
+    return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browseMode, search, category, source, zoneFilter, fetchProducts])
 
   // ── Product type mode state ───────────────────────────────────────
   // Data-driven from ledlum_products: Level 1 = collection (indoor/outdoor),
@@ -368,6 +477,23 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
   const displayedProducts = browseMode === 'zone' ? zoneProducts : ptProducts
   const productCount       = displayedProducts.length
+  const displayedLoading   = browseMode === 'zone' ? zoneLoading : ptLoading
+  const displayedLoadingMore = browseMode === 'zone' ? loadingMore : ptLoadingMore
+  const displayedHasMore   = browseMode === 'zone' ? hasMore : ptHasMore
+  const displayedLoadMore  = browseMode === 'zone' ? loadMore : ptLoadMore
+
+  // ── Infinite scroll (20 at a time, both modes) ────────────────────
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = loadMoreSentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      entries => { if (entries[0]?.isIntersecting) displayedLoadMore() },
+      { rootMargin: '400px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [browseMode, displayedLoadMore, displayedProducts.length])
 
   // ── Handlers ────────────────────────────────────────────────────
   const handleModeChange = (m: BrowseMode) => {
@@ -423,13 +549,15 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   return (
     <div className="min-h-screen app-shell">
       {/* Header — only in product mode; zone mode has its own header inside ZoneNav */}
-      {browseMode === 'product' && <Header productCount={productCount} />}
+      <div ref={headerRef}>
+        {browseMode === 'product' && <Header productCount={productCount} />}
 
-      {/* ── Zone tabs + header (zone mode) ── */}
-      {browseMode === 'zone' && <ZoneNav productCount={productCount} />}
+        {/* ── Zone tabs + header (zone mode) ── */}
+        {browseMode === 'zone' && <ZoneNav productCount={productCount} />}
+      </div>
 
       <div className="flex flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-  
+
   {/* ✅ Show ONLY on /zone, product mode (hidden for zone dashboard) */}
   {pathname.startsWith('/zone') && browseMode !== 'zone' && (
     <ModeSwitcher mode={browseMode} onChange={handleModeChange} />
@@ -468,8 +596,6 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         />
       )}
 
-      {/* ── Zone mode toolbar ── */}
-      {/* {browseMode === 'zone' && ( */}
         <Toolbar
           search={search}     onSearch={setSearch}
           category={category} onCategory={setCategory}
@@ -481,7 +607,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
           onZoneFilter={setZoneFilter}
           showZoneFilter={!activeZone && user?.role === 'admin'}
         />
-      {/* )} */}
+      </div>
 
       {/* ── Welcome banner for vendors ── */}
       {can('cart') && (
@@ -505,13 +631,22 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
             <div className="w-1 h-6 bg-primary rounded-full" />
             <h2 className="text-lg font-bold font-bai text-foreground">{zone.label}</h2>
             <span className="text-xs text-gray-dark font-pop bg-gray px-2.5 py-1 rounded-full border border-gray-mid">
-              {zoneProducts.length} products
+              {productCount}{hasMore ? '+' : ''} products
             </span>
           </div>
         )}
 
+        {/* Initial loading state */}
+        {displayedLoading && displayedProducts.length === 0 && (
+          <div className="grid gap-4 sm:gap-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))' }}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="aspect-[4/3] animate-pulse rounded-2xl bg-gray" />
+            ))}
+          </div>
+        )}
+
         {/* Empty state */}
-        {displayedProducts.length === 0 && (
+        {!displayedLoading && displayedProducts.length === 0 && (
           <div className="text-center py-24">
             <svg className="opacity-10 mx-auto mb-4" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
               <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -562,6 +697,16 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
             ))}
           </div>
         )}
+
+        {/* Infinite-scroll trigger + "loading more" indicator */}
+        {(displayedHasMore || displayedLoadingMore) && (
+          <div ref={loadMoreSentinelRef} className="flex justify-center py-8">
+            <div className="flex items-center gap-2 text-xs text-gray-dark font-pop">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-mid border-t-primary" />
+              Loading more…
+            </div>
+          </div>
+        )}
       </main>
 
       <ProductDetail
@@ -584,6 +729,20 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
       <CartDrawer />
       <ToastContainer />
+
+      {/* ── Scroll to top ── */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        aria-label="Scroll to top"
+        className={`tap-target fixed bottom-6 right-6 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white shadow-lg transition-all duration-300 hover:bg-primary-dark ${
+          showScrollTop ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0'
+        }`}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <line x1="12" y1="19" x2="12" y2="5"/>
+          <polyline points="5 12 12 5 19 12"/>
+        </svg>
+      </button>
     </div>
   )
 }

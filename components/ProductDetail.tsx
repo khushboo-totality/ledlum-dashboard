@@ -9,6 +9,8 @@ import { useToast } from '@/context/ToastContext'
 import { getImageUrl } from '@/lib/auth'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
+import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
+import { downloadBoqPdf } from '@/lib/exportBoqPdf'
 
 interface Props {
   product: Product | null
@@ -56,8 +58,17 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
   const [selection, setSelection]   = useState<CartSelection>({})
   const [qty, setQty]               = useState(1)
   const [activeTab, setActiveTab]   = useState<'overview' | 'config' | 'gallery'>('overview')
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const detail = product ? getProductDetail(product.Codes) : null
+
+  useEffect(() => {
+    if (!lightboxSrc) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxSrc(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightboxSrc])
 
   // Reset when product changes
   useEffect(() => {
@@ -123,57 +134,48 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
     }
   }
 
-  const handlePrint = (name: string, prod: typeof product) => {
-    if (!prod) return
+  const handlePrint = async (name: string, prod: typeof product) => {
+    if (!prod || downloadingPdf) return
     const z = getZoneById(prod.zone ?? '')?.label ?? prod.zone ?? ''
-    const specs = [
-      { k: 'Product Code', v: prod.Codes },
-      { k: 'Category',     v: prod.Category },
-      { k: 'Zone',         v: z },
-      prod.Wattage     ? { k: 'Wattage',     v: prod.Wattage     } : null,
-      prod.ColourTemp  ? { k: 'Colour Temp', v: prod.ColourTemp  } : null,
-      prod.BeamAngle   ? { k: 'Beam Angle',  v: prod.BeamAngle   } : null,
-      prod.Finish      ? { k: 'Finish',      v: prod.Finish      } : null,
-      prod.Dimensions  ? { k: 'Dimensions',  v: prod.Dimensions  } : null,
-      prod.Description ? { k: 'Description', v: prod.Description } : null,
-    ].filter(Boolean) as { k: string; v: string }[]
 
-    const rows = specs.map(s =>
-      `<tr><td style="padding:8px 12px;font-size:12px;color:#666;width:140px;background:#f8f7f4;border-bottom:1px solid #eee">${s.k}</td><td style="padding:8px 12px;font-size:13px;color:#171717;font-weight:600;border-bottom:1px solid #eee">${s.v}</td></tr>`
-    ).join('')
+    // Single-row BOQ — BOQDocument hides any column with no data across all
+    // rows, so only the specs this product actually has get shown.
+    const row: BoqRow = {
+      slNo: 1,
+      description: name || prod.Codes,
+      image: prod.imageUrl || prod.ImageLink || undefined,
+      type: prod.Category ?? '—',
+      code: prod.Codes,
+      watt: prod.Wattage ?? prod.watts ?? '—',
+      beam: prod.BeamAngle ?? prod.beam_angle ?? '—',
+      cct: prod.ColourTemp ?? (prod.cct?.length ? prod.cct.join('/') : '—'),
+      auto: '—',
+      color: prod.Finish ?? (prod.body_colors?.length ? prod.body_colors.join('/') : '—'),
+      qty: 1,
+      unit: "NO'S",
+      mrp: 0,
+      disc: 0,
+      net: 0,
+      total: 0,
+    }
 
-    const img = prod.imageUrl || prod.ImageLink || ''
-    const imgHtml = img ? `<img src="${img}" style="max-height:260px;max-width:100%;object-fit:contain;border-radius:8px;margin-bottom:16px" />` : ''
+    const meta: BoqMeta = {
+      ...SAMPLE_META,
+      date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      preparedBy: user?.name ?? SAMPLE_META.preparedBy,
+      dealerName: user?.company ?? user?.name ?? SAMPLE_META.dealerName,
+      projectName: `Product Data Sheet — ${z || SAMPLE_META.projectName}`,
+    }
 
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${prod.Codes} — LEDLUM</title>
-<style>
-  body { font-family: 'Segoe UI', Arial, sans-serif; margin:0; padding:32px; color:#171717; background:#fff; }
-  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; padding-bottom:16px; border-bottom:3px solid #9a8c66; }
-  .brand { font-size:22px; font-weight:800; letter-spacing:0.05em; color:#9a8c66; }
-  .code { font-size:14px; color:#888; margin-top:4px; }
-  h1 { font-size:20px; font-weight:700; margin:0 0 4px; }
-  table { width:100%; border-collapse:collapse; margin-top:8px; border-radius:8px; overflow:hidden; border:1px solid #eee; }
-  .footer { margin-top:32px; font-size:10px; color:#bbb; text-align:center; border-top:1px solid #eee; padding-top:12px; }
-  @media print { body { padding:16px; } }
-</style></head>
-<body>
-  <div class="header">
-    <div><div class="brand">LEDLUM</div><div class="code">Product Data Sheet</div></div>
-    <div style="text-align:right"><div style="font-size:11px;color:#888">Generated ${new Date().toLocaleDateString('en-IN')}</div></div>
-  </div>
-  <h1>${name || prod.Codes}</h1>
-  ${imgHtml}
-  <table>${rows}</table>
-  <div class="footer">LEDLUM — Confidential product information. For internal and trade use only.</div>
-</body></html>`
-
-    const w = window.open('', '_blank', 'width=700,height=900')
-    if (!w) { toast('Please allow popups to download PDF', 'error'); return }
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => { w.print() }, 400)
+    setDownloadingPdf(true)
+    try {
+      await downloadBoqPdf(meta, [row], `${prod.Codes}-datasheet.pdf`)
+    } catch (err) {
+      console.error('[ProductDetail] PDF export failed:', err)
+      toast('Failed to generate PDF', 'error')
+    } finally {
+      setDownloadingPdf(false)
+    }
   }
 
   const handleAddToCart = () => {
@@ -228,13 +230,20 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
               {/* Hero image */}
               <div className="flex-1 relative overflow-hidden">
                 {galleries[galleryIdx] ? (
-                  <Image
-                    src={galleries[galleryIdx]}
-                    alt={product?.Codes ?? ''}
-                    fill sizes="44vw"
-                    className="object-cover animate-zoom-slow"
-                    priority
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setLightboxSrc(galleries[galleryIdx])}
+                    className="absolute inset-0 h-full w-full cursor-zoom-in"
+                    title="View full size"
+                  >
+                    <Image
+                      src={galleries[galleryIdx]}
+                      alt={product?.Codes ?? ''}
+                      fill sizes="44vw"
+                      className="object-cover animate-zoom-slow"
+                      priority
+                    />
+                  </button>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-mid">
                     <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -295,15 +304,20 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
                   {can('download') && (
                     <button
                       onClick={() => handlePrint(detail?.productAbout?.name ?? '', product)}
+                      disabled={downloadingPdf}
                       title="Download as PDF"
-                      className="w-9 h-9 border border-gray rounded-full flex items-center justify-center text-gray-dark hover:bg-primary/8 hover:text-primary hover:border-primary/40 transition-all"
+                      className="w-9 h-9 border border-gray rounded-full flex items-center justify-center text-gray-dark hover:bg-primary/8 hover:text-primary hover:border-primary/40 disabled:opacity-60 transition-all"
                     >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                      </svg>
+                      {downloadingPdf ? (
+                        <div className="w-3.5 h-3.5 border-2 border-gray-dark border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                          <polyline points="7 10 12 15 17 10"/>
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                          <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                      )}
                     </button>
                   )}
                   <button onClick={onClose}
@@ -489,14 +503,14 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
                       className="px-5 py-2.5 border border-gray-mid rounded-lg text-sm font-semibold font-bai text-gray-text hover:border-foreground hover:text-foreground transition-colors">
                       Close
                     </button>
-                    {can('edit') && (
+                    {can('edit') && !product?.readOnly && (
                       <button onClick={() => { onClose(); onEdit() }}
                         className="flex items-center gap-2 px-5 py-2.5 border-2 border-primary text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-bold font-bai transition-all">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         Edit
                       </button>
                     )}
-                    {can('delete') && (
+                    {can('delete') && !product?.readOnly && (
                       <button onClick={() => { onClose(); onDelete() }}
                         className="px-5 py-2.5 bg-primary hover:bg-secondary text-white rounded-lg text-sm font-bold font-bai transition-colors">
                         Delete
@@ -515,14 +529,21 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
             <div className="h-56 bg-gray relative flex-shrink-0 flex items-center justify-center overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-1 bg-primary" />
               {imgUrl && !imgError && product ? (
-                <Image src={imgUrl} alt={product.Codes} fill sizes="xl" className="object-cover animate-zoom-slow" onError={() => setImgError(true)} priority />
+                <button
+                  type="button"
+                  onClick={() => setLightboxSrc(imgUrl)}
+                  className="absolute inset-0 h-full w-full cursor-zoom-in"
+                  title="View full size"
+                >
+                  <Image src={imgUrl} alt={product.Codes} fill sizes="xl" className="object-cover animate-zoom-slow" onError={() => setImgError(true)} priority />
+                </button>
               ) : (
                 <div className="flex flex-col items-center gap-3 text-gray-mid">
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                   <span className="text-xs font-bai uppercase tracking-widest">No Image</span>
                 </div>
               )}
-              <div className="absolute bottom-4 left-5 text-4xl font-bold text-black/7 font-bai select-none pointer-events-none">{product?.Codes}</div>
+              {/* <div className="absolute bottom-4 left-5 text-4xl font-bold text-black/7 font-bai select-none pointer-events-none">{product?.Codes}</div> */}
             </div>
 
             {/* Info */}
@@ -551,14 +572,19 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
                 {can('download') && (
                   <button
                     onClick={() => handlePrint(product?.Codes ?? '', product)}
+                    disabled={downloadingPdf}
                     title="Download as PDF"
-                    className="w-9 h-9 border border-gray rounded-full flex items-center justify-center text-gray-dark hover:bg-primary/8 hover:text-primary hover:border-primary/40 transition-all"
+                    className="w-9 h-9 border border-gray rounded-full flex items-center justify-center text-gray-dark hover:bg-primary/8 hover:text-primary hover:border-primary/40 disabled:opacity-60 transition-all"
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
+                    {downloadingPdf ? (
+                      <div className="w-3.5 h-3.5 border-2 border-gray-dark border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                    )}
                   </button>
                 )}
                 <button onClick={onClose}
@@ -637,7 +663,7 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
                   Add to Quote
                 </button>
               )}
-              {can('edit') && (
+              {can('edit') && !product?.readOnly && (
                 <button onClick={() => { onClose(); onEdit() }}
                   className="px-5 py-2.5 border-2 border-primary text-primary hover:bg-primary hover:text-white rounded-lg text-sm font-bold font-bai transition-all">
                   Edit
@@ -647,6 +673,31 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
           </div>
         )}
       </div>
+
+      {/* ── Image lightbox ── */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-6"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <button
+            onClick={() => setLightboxSrc(null)}
+            aria-label="Close"
+            className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/10"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxSrc}
+            alt=""
+            className="max-h-full max-w-full object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
     </>
   )
 }

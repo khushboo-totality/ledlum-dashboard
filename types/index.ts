@@ -27,6 +27,9 @@ export interface Product {
   createdAt?: string
   updatedAt?: string | null
   detail?: ProductDetail
+  // True for rows synthesized from ledlum_zone_products that have no
+  // matching ledlum_products row yet — display-only, not editable/deletable.
+  readOnly?: boolean
 
   // ── Real Supabase (ledlum_products) fields — populated for zone-mode
   // products, absent for "Browse by Product Type" mock data. Display

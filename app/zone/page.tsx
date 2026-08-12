@@ -2,24 +2,23 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import CatalogPage from '@/components/CatalogPage'
+import PageSpinner from '@/components/PageSpinner'
+import { useZones } from '@/context/ZonesContext'
 
 function ZoneIndexInner() {
   const [hydrated, setHydrated] = useState(false)
+  const { loading: zonesLoading } = useZones()
 
   useEffect(() => { setHydrated(true) }, [])
 
-  if (!hydrated) return null
+  if (!hydrated || zonesLoading) return <PageSpinner />
 
   return <CatalogPage initialMode="zone" />
 }
 
 export default function ZoneIndexPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
+    <Suspense fallback={<PageSpinner />}>
       <ZoneIndexInner />
     </Suspense>
   )

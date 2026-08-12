@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listProducts, syncExternal } from '@/lib/services/products'
 
 export async function GET() {
-  return NextResponse.json(await listProducts())
+  const { items } = await listProducts()
+  return NextResponse.json(items)
 }
 
 export async function POST(req: NextRequest) {
