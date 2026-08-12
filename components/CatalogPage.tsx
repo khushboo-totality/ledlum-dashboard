@@ -8,16 +8,13 @@ import { useCart } from '@/context/CartContext'
 import { useProducts } from '@/lib/useProducts'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
-import {
-  TAXONOMY,
-  type TaxonomyCategory,
-  type Subcategory,
-} from '@/lib/productTaxonomy'
-import {
-  getProductsByType,
-  getProductsByCategory,
-  getProductsBySubcategory,
-} from '@/lib/productTaxonomyData'
+
+const COLLECTIONS = ['indoor', 'outdoor']
+const COLLECTION_LABELS: Record<string, string> = {
+  indoor: 'Indoor Lighting',
+  outdoor: 'Outdoor Lighting',
+}
+const collectionLabel = (c: string) => COLLECTION_LABELS[c] ?? (c.charAt(0).toUpperCase() + c.slice(1))
 import Header from '@/components/Header'
 import ZoneNav from '@/components/ZoneNav'
 import Toolbar from '@/components/Toolbar'
@@ -136,28 +133,30 @@ function ModeSwitcher({
 }
 
 // ── Product Type Filter Panel ──────────────────────────────────────────
-// Behaviour: category only → show ALL products in that category
-//            category + subcategory → show ALL products in that subcategory
-//            category + subcategory + type → show products of that specific type
+// Data-driven from the live Supabase catalogue (no fictional taxonomy):
+//   Level 1 — Collection (indoor / outdoor, from ledlum_products.collection)
+//   Level 2 — Category   (ledlum_products.group_name, real values, per collection)
+// Behaviour: collection only → show ALL products in that collection
+//            collection + category → show ALL products in that category
 function ProductTypePanel({
-  activeCategory,
-  activeSubcategory,
-  activeTypeId,
-  onCategory,
-  onSubcategory,
-  onType,
+  collections,
+  activeCollection,
+  groupCounts,
+  activeGroup,
+  onCollection,
+  onGroup,
   productCount,
   search,
   onSearch,
   viewLayout,
   onViewLayout,
 }: {
-  activeCategory: TaxonomyCategory
-  activeSubcategory: Subcategory | null
-  activeTypeId: string | null
-  onCategory: (c: TaxonomyCategory) => void
-  onSubcategory: (s: Subcategory | null) => void
-  onType: (t: string | null) => void
+  collections: string[]
+  activeCollection: string
+  groupCounts: { name: string; count: number }[]
+  activeGroup: string | null
+  onCollection: (c: string) => void
+  onGroup: (g: string | null) => void
   productCount: number
   search: string
   onSearch: (s: string) => void
@@ -166,105 +165,61 @@ function ProductTypePanel({
 }) {
   return (
     <div className="border-b border-white/80 bg-white/75 backdrop-blur">
-      {/* ── Level 1: Category row ── */}
+      {/* ── Level 1: Collection row ── */}
       <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 pt-4 scrollbar-hide sm:px-6 lg:px-8">
         <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop flex-shrink-0 mr-1">
           Category
         </span>
-        {TAXONOMY.map(cat => (
+        {collections.map(c => (
           <button
-            key={cat.id}
-            onClick={() => {
-              onCategory(cat)
-              onSubcategory(null)
-              onType(null)
-            }}
+            key={c}
+            onClick={() => { onCollection(c); onGroup(null) }}
             className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
-              activeCategory.id === cat.id
+              activeCollection === c
                 ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
                 : 'bg-gray border border-gray-mid text-gray-text hover:border-primary hover:text-primary'
             }`}
           >
-            {cat.label}
+            {collectionLabel(c)}
           </button>
         ))}
       </div>
 
-      {/* ── Level 2: Subcategory row ── */}
-      {activeCategory.subcategories.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide sm:px-6 lg:px-8">
+      {/* ── Level 2: Category row (real group_name values) ── */}
+      {groupCounts.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide sm:px-6 lg:px-8">
           <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop flex-shrink-0 mr-1">
             Subcategory
           </span>
-          {/* "All" chip to reset subcategory */}
+          {/* "All" chip to reset category */}
           <button
-            onClick={() => { onSubcategory(null); onType(null) }}
+            onClick={() => onGroup(null)}
             className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai transition-all ${
-              !activeSubcategory
+              !activeGroup
                 ? 'bg-foreground text-white shadow-sm'
                 : 'bg-gray border border-gray-mid text-gray-text hover:border-foreground hover:text-foreground'
             }`}
           >
             All
           </button>
-          {activeCategory.subcategories.map(sub => (
+          {groupCounts.map(({ name, count }) => (
             <button
-              key={sub.id}
-              onClick={() => {
-                onSubcategory(sub)
-                onType(null)
-              }}
-              className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
-                activeSubcategory?.id === sub.id
-                  ? 'bg-foreground text-white shadow-sm'
-                  : 'bg-gray border border-gray-mid text-gray-text hover:border-foreground hover:text-foreground'
+              key={name}
+              onClick={() => onGroup(activeGroup === name ? null : name)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
+                activeGroup === name
+                  ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                  : 'bg-gray border border-gray-mid text-gray-text hover:border-primary hover:text-primary'
               }`}
             >
-              {sub.label}
-              <span className="ml-1.5 opacity-50 font-pop">{sub.types.length}</span>
+              {name}
+              <span className={`text-[9px] font-pop px-1 py-0.5 rounded ${
+                activeGroup === name ? 'bg-white/25' : 'bg-white text-gray-dark'
+              }`}>
+                {count}
+              </span>
             </button>
           ))}
-        </div>
-      )}
-
-      {/* ── Level 3: Product type row (only when subcategory selected) ── */}
-      {activeSubcategory && (
-        <div className="flex items-center gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide sm:px-6 lg:px-8">
-          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop flex-shrink-0 mr-1">
-            Product Type
-          </span>
-          {/* "All types" chip */}
-          <button
-            onClick={() => onType(null)}
-            className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai transition-all ${
-              !activeTypeId
-                ? 'bg-primary/15 text-primary border border-primary/30 ring-1 ring-primary/20'
-                : 'bg-gray border border-gray-mid text-gray-text hover:border-primary hover:text-primary'
-            }`}
-          >
-            All types
-          </button>
-          {activeSubcategory.types.map(type => {
-            const count = getProductsByType(type.id).length
-            return (
-              <button
-                key={type.id}
-                onClick={() => onType(activeTypeId === type.id ? null : type.id)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
-                  activeTypeId === type.id
-                    ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
-                    : 'bg-gray border border-gray-mid text-gray-text hover:border-primary hover:text-primary'
-                }`}
-              >
-                {type.label}
-                <span className={`text-[9px] font-pop px-1 py-0.5 rounded ${
-                  activeTypeId === type.id ? 'bg-white/25' : 'bg-white text-gray-dark'
-                }`}>
-                  {count}
-                </span>
-              </button>
-            )
-          })}
         </div>
       )}
 
@@ -350,11 +305,12 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const [source, setSource]         = useState('')
   const [zoneFilter, setZoneFilter] = useState('')  // admin zone filter for all-zones view
 
-  // ── Product type mode state ─────────────────────────────────────
-  const [activeCat, setActiveCat]   = useState<TaxonomyCategory>(TAXONOMY[0])
-  const [activeSub, setActiveSub]   = useState<Subcategory | null>(null)
-  const [activeTypeId, setActiveTypeId] = useState<string | null>(null)
-  const [ptSearch, setPtSearch]     = useState('')
+  // ── Product type mode state ───────────────────────────────────────
+  // Data-driven from ledlum_products: Level 1 = collection (indoor/outdoor),
+  // Level 2 = group_name (the real, populated category field on every row).
+  const [activeCollection, setActiveCollection] = useState<string>('indoor')
+  const [activeGroup, setActiveGroup]           = useState<string | null>(null)
+  const [ptSearch, setPtSearch]                 = useState('')
 
   // ── Shared ──────────────────────────────────────────────────────
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -367,19 +323,22 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     if (p) setSelectedProduct(p)
   }, [initialProductId, products])
 
-  // ── Smart product filter for product mode ────────────────────────
-  // Category selected only → ALL products in that category
-  // Category + Subcategory → ALL products in that subcategory
-  // Category + Subcategory + Type → products of that specific type
-  const ptProducts = useMemo(() => {
-    let list: Product[]
-    if (activeTypeId) {
-      list = getProductsByType(activeTypeId)
-    } else if (activeSub) {
-      list = getProductsBySubcategory(activeSub.id)
-    } else {
-      list = getProductsByCategory(activeCat.id)
+  // ── Product type mode: collection → group_name, both from live data ──
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const p of products) {
+      if ((p.collection || 'indoor') !== activeCollection) continue
+      const name = p.Category || 'Uncategorized'
+      counts.set(name, (counts.get(name) ?? 0) + 1)
     }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [products, activeCollection])
+
+  const ptProducts = useMemo(() => {
+    let list = products.filter(p => (p.collection || 'indoor') === activeCollection)
+    if (activeGroup) list = list.filter(p => p.Category === activeGroup)
     if (ptSearch) {
       const q = ptSearch.toLowerCase()
       list = list.filter(p =>
@@ -388,9 +347,8 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         (p.Description ?? '').toLowerCase().includes(q)
       )
     }
-    
     return list
-  }, [activeCat, activeSub, activeTypeId, ptSearch])
+  }, [products, activeCollection, activeGroup, ptSearch])
 
   // Zone mode filter
   const zoneProducts = useMemo(() => {
@@ -452,16 +410,13 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       productImage:       product.imageUrl ?? product.ImageLink ?? '',
       zone:               product.zone ?? activeZone ?? '',
       browseMode,
-      productCategory:    browseMode === 'product' ? activeCat.label : undefined,
-      productSubcategory: browseMode === 'product' ? activeSub?.label : undefined,
-      productTypeName:    browseMode === 'product'
-        ? activeSub?.types.find(t => t.id === activeTypeId)?.label
-        : undefined,
+      productCategory:    browseMode === 'product' ? collectionLabel(activeCollection) : undefined,
+      productSubcategory: browseMode === 'product' ? activeGroup ?? undefined : undefined,
       selection: {},
       quantity: 1,
     })
     toast(`${product.Codes} added to quote`, 'success')
-  }, [can, addItem, browseMode, activeCat, activeSub, activeTypeId, activeZone, toast])
+  }, [can, addItem, browseMode, activeCollection, activeGroup, activeZone, toast])
 
   const isVendorOrGuest = user?.role === 'vendor' || user?.role === 'guest'  // kept for cart banner only
 
@@ -499,12 +454,12 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       {/* ── Product type filter panel (product mode) ── */}
       {browseMode === 'product' && (
         <ProductTypePanel
-          activeCategory={activeCat}
-          activeSubcategory={activeSub}
-          activeTypeId={activeTypeId}
-          onCategory={setActiveCat}
-          onSubcategory={setActiveSub}
-          onType={setActiveTypeId}
+          collections={COLLECTIONS}
+          activeCollection={activeCollection}
+          groupCounts={groupCounts}
+          activeGroup={activeGroup}
+          onCollection={setActiveCollection}
+          onGroup={setActiveGroup}
           productCount={ptProducts.length}
           search={ptSearch}
           onSearch={setPtSearch}
@@ -615,11 +570,8 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         onEdit={() => selectedProduct && openEdit(selectedProduct)}
         onDelete={() => selectedProduct && handleDelete(selectedProduct)}
         browseMode={browseMode}
-        productCategory={browseMode === 'product' ? activeCat.label : undefined}
-        productSubcategory={browseMode === 'product' ? activeSub?.label : undefined}
-        productTypeName={browseMode === 'product'
-          ? activeSub?.types.find(t => t.id === activeTypeId)?.label
-          : undefined}
+        productCategory={browseMode === 'product' ? collectionLabel(activeCollection) : undefined}
+        productSubcategory={browseMode === 'product' ? activeGroup ?? undefined : undefined}
         activeZone={activeZone}
       />
 

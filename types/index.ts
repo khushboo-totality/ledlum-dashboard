@@ -51,6 +51,7 @@ export interface Product {
   cri?: string | null
   website?: string | null
   product_type?: string | null
+  extra_specs?: Record<string, string> | null
 }
 
 // ── Rich product detail ──────────────────────────────────────────────

@@ -591,6 +591,9 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
                   product?.luminous    ? { k: 'Luminous Flux',  v: product.luminous } : null,
                   product?.cri         ? { k: 'CRI',            v: product.cri } : null,
                   product?.website     ? { k: 'Website',        v: product.website } : null,
+                  ...Object.entries(product?.extra_specs ?? {})
+                    .filter(([, v]) => v && v !== 'N/A')
+                    .map(([k, v]) => ({ k, v })),
                 ].filter((r): r is { k: string; v: string } => !!r && !!r.v).map(r => (
                   <div key={r.k} className="flex items-center px-4 py-3 gap-3">
                     <span className="text-xs text-gray-dark font-pop w-24 flex-shrink-0">{r.k}</span>

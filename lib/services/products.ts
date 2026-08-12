@@ -59,6 +59,7 @@ interface ProductRow {
   website: string | null
   product_type: string | null
   created_at: string
+  extra_specs: Record<string, string> | null
 }
 
 function mapRowToProduct(row: ProductRow, zoneSlugs: string[]): Product {
@@ -103,6 +104,7 @@ function mapRowToProduct(row: ProductRow, zoneSlugs: string[]): Product {
     cri: row.cri,
     website: row.website,
     product_type: row.product_type,
+    extra_specs: row.extra_specs && Object.keys(row.extra_specs).length ? row.extra_specs : null,
   }
 }
 
