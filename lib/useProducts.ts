@@ -15,7 +15,19 @@ export interface ProductQueryFilters {
   productType?: string
 }
 
-export function useProducts(zone?: string) {
+export interface UseProductsOptions {
+  /**
+   * Skip the automatic fetchCategories() call on mount — getCategories() is
+   * an expensive full-table-scan aggregate on the server, so callers that
+   * don't render the zone-mode category dropdown (e.g. a second, product-type-
+   * mode instance of this hook driven by /api/product-taxonomy instead)
+   * should opt out rather than pay for data they never use.
+   */
+  skipCategories?: boolean
+}
+
+export function useProducts(zone?: string, options?: UseProductsOptions) {
+  const skipCategories = options?.skipCategories ?? false
   const [products, setProducts]       = useState<Product[]>([])
   const [loading, setLoading]         = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -140,8 +152,9 @@ export function useProducts(zone?: string) {
   // Product fetching (incl. the initial load) is driven by the caller via
   // fetchProducts(filters) — CatalogPage's filter-effect covers mount too.
   useEffect(() => {
+    if (skipCategories) return
     fetchCategories()
-  }, [fetchCategories])
+  }, [skipCategories, fetchCategories])
 
   return {
     products, loading, loadingMore, hasMore, loadMore,

@@ -1,20 +1,15 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import type { Product, ProductFormData, BrowseMode } from '@/types'
+import type { CollectionNode, ProductTypeNode } from '@/lib/services/products'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { useCart } from '@/context/CartContext'
 import { useProducts } from '@/lib/useProducts'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
-
-const COLLECTIONS = ['indoor', 'outdoor']
-const COLLECTION_LABELS: Record<string, string> = {
-  indoor: 'Indoor Lighting',
-  outdoor: 'Outdoor Lighting',
-}
-const collectionLabel = (c: string) => COLLECTION_LABELS[c] ?? (c.charAt(0).toUpperCase() + c.slice(1))
+import { toCartProductSpecs } from '@/lib/cartSpecs'
 import Header from '@/components/Header'
 import ZoneNav from '@/components/ZoneNav'
 import Toolbar from '@/components/Toolbar'
@@ -195,70 +190,78 @@ function FilterRow({ label, children, className = '' }: { label: string; childre
 }
 
 // ── Product Type Filter Panel ──────────────────────────────────────────
-// Data-driven from the live Supabase catalogue (no fictional taxonomy):
-//   Level 1 — Collection (indoor / outdoor, from ledlum_products.collection)
-//   Level 2 — Category   (ledlum_products.group_name, real values, per collection)
-// Behaviour: collection only → show ALL products in that collection
-//            collection + category → show ALL products in that category
+// Fully data-driven from the live Supabase catalogue via /api/product-taxonomy
+// (no hardcoded/fictional taxonomy — however many collections, group_names,
+// or product types actually exist in ledlum_products is however many render):
+//   Level 1 — Collection   (ledlum_products.collection, e.g. indoor/outdoor)
+//   Level 2 — Category     (ledlum_products.group_name, real values, per collection)
+//   Level 3 — Product Type (ledlum_products.category, per group — only when present)
 function ProductTypePanel({
   collections,
   activeCollection,
-  groupCounts,
-  activeGroup,
   onCollection,
+  activeGroup,
   onGroup,
-  productCount,
-  search,
-  onSearch,
-  viewLayout,
-  onViewLayout,
+  activeProductType,
+  onProductType,
+  loading,
 }: {
-  collections: string[]
+  collections: CollectionNode[]
   activeCollection: string
-  groupCounts: { name: string; count: number }[]
-  activeGroup: string | null
   onCollection: (c: string) => void
+  activeGroup: string | null
   onGroup: (g: string | null) => void
-  productCount: number
-  search: string
-  onSearch: (s: string) => void
-  viewLayout: ViewLayout
-  onViewLayout: (v: ViewLayout) => void
+  activeProductType: string | null
+  onProductType: (t: string | null) => void
+  loading: boolean
 }) {
-  const activeCollectionNode = taxonomy.find(c => c.name === activeCollection) ?? null
-  const activeGroupNode = activeCollectionNode?.groupNames.find(g => g.name === activeGroupName) ?? null
+  const activeCollectionNode = collections.find(c => c.name === activeCollection) ?? null
+  const groupNames = activeCollectionNode?.groupNames ?? []
+  const activeGroupNode = groupNames.find(g => g.name === activeGroup) ?? null
+  const productTypes = activeGroupNode?.productTypes ?? []
+
+  if (loading && collections.length === 0) {
+    return (
+      <div className="border-b border-white/80 bg-white/75 backdrop-blur px-4 pb-4 pt-4 sm:px-6 lg:px-8">
+        <div className="flex gap-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-7 w-28 animate-pulse rounded-full bg-gray" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="border-b border-white/80 bg-white/75 backdrop-blur">
       {/* ── Level 1: Collection row ── */}
-      <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 pt-4 scrollbar-hide sm:px-6 lg:px-8">
-        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop flex-shrink-0 mr-1">
-          Category
-        </span>
+      <FilterRow label="Category" className="pb-2 pt-4">
         {collections.map(c => (
           <button
-            key={c}
-            onClick={() => { onCollection(c); onGroup(null) }}
+            key={c.name}
+            onClick={() => { onCollection(c.name); onGroup(null); onProductType(null) }}
             className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
-              activeCollection === c
+              activeCollection === c.name
                 ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
                 : 'bg-gray border border-gray-mid text-gray-text hover:border-primary hover:text-primary'
             }`}
           >
-            {collectionLabel(c)}
+            {c.label}
+            <span className={`text-[9px] font-pop px-1 py-0.5 rounded ${
+              activeCollection === c.name ? 'bg-white/25' : 'bg-white text-gray-dark'
+            }`}>
+              {c.count}
+            </span>
           </button>
         ))}
       </FilterRow>
 
       {/* ── Level 2: Category row (real group_name values) ── */}
-      {groupCounts.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide sm:px-6 lg:px-8">
-          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-dark font-pop flex-shrink-0 mr-1">
-            Subcategory
-          </span>
+      {groupNames.length > 0 && (
+        <FilterRow label="Subcategory" className="pb-2">
           {/* "All" chip to reset category */}
           <button
-            onClick={() => onGroup(null)}
+            onClick={() => { onGroup(null); onProductType(null) }}
             className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai transition-all ${
               !activeGroup
                 ? 'bg-foreground text-white shadow-sm'
@@ -267,10 +270,10 @@ function ProductTypePanel({
           >
             All
           </button>
-          {groupCounts.map(({ name, count }) => (
+          {groupNames.map(({ name, count }) => (
             <button
               key={name}
-              onClick={() => onGroup(activeGroup === name ? null : name)}
+              onClick={() => { onGroup(activeGroup === name ? null : name); onProductType(null) }}
               className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
                 activeGroup === name
                   ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
@@ -288,56 +291,40 @@ function ProductTypePanel({
         </FilterRow>
       )}
 
-      {/* ── Search + view controls ── */}
-      <div className="flex flex-col gap-3 border-t border-white/80 px-4 pb-4 pt-3 sm:px-6 md:flex-row md:items-center lg:px-8">
-        {/* <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <div className="w-1 h-4 bg-primary rounded-full flex-shrink-0" />
-          <span className="text-xs font-semibold font-bai text-foreground truncate">
-            {activeCategory.label}
-            {activeSubcategory && <span className="text-gray-dark font-normal"> › {activeSubcategory.label}</span>}
-            {activeTypeId && activeSubcategory && (
-              <span className="text-gray-dark font-normal">
-                {' › '}{activeSubcategory.types.find(t => t.id === activeTypeId)?.label}
-              </span>
-            )}
-          </span>
-          <span className="text-[10px] font-pop text-gray-dark bg-gray border border-gray-mid px-2 py-0.5 rounded-full flex-shrink-0 ml-1">
-            {productCount} product{productCount !== 1 ? 's' : ''}
-          </span>
-        </div> */}
-
-        {/* Search */}
-        {/* <div className="relative w-full flex-shrink-0 md:w-56">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-dark pointer-events-none">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={e => onSearch(e.target.value)}
-            placeholder="Search products…"
-            className="h-10 w-full rounded-xl border border-gray-mid bg-white pl-9 pr-3 text-xs font-bai text-foreground outline-none transition-all placeholder:text-gray-dark focus:border-primary focus:ring-4 focus:ring-primary/10"
-          />
-        </div> */}
-
-        {/* View toggle */}
-        {/* <div className="flex h-10 flex-shrink-0 items-center overflow-hidden rounded-xl border border-gray-mid bg-white">
-          {(['grid', 'list'] as ViewLayout[]).map(v => (
+      {/* ── Level 3: Product type row (only when the active group has one) ── */}
+      {activeGroup && productTypes.length > 0 && (
+        <FilterRow label="Product Type" className="pb-3">
+          <button
+            onClick={() => onProductType(null)}
+            className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai transition-all ${
+              !activeProductType
+                ? 'bg-primary/15 text-primary border border-primary/30 ring-1 ring-primary/20'
+                : 'bg-gray border border-gray-mid text-gray-text hover:border-primary hover:text-primary'
+            }`}
+          >
+            All types
+          </button>
+          {productTypes.map(({ name, count }: ProductTypeNode) => (
             <button
-              key={v}
-              onClick={() => onViewLayout(v)}
-              title={v === 'grid' ? 'Grid view' : 'List view'}
-              className={`px-2.5 py-1.5 transition-colors ${viewLayout === v ? 'bg-primary text-white' : 'text-gray-dark hover:bg-gray'}`}
+              key={name}
+              onClick={() => onProductType(activeProductType === name ? null : name)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
+                activeProductType === name
+                  ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                  : 'bg-gray border border-gray-mid text-gray-text hover:border-primary hover:text-primary'
+              }`}
             >
-              {v === 'grid'
-                ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-              }
+              {name}
+              <span className={`text-[9px] font-pop px-1 py-0.5 rounded ${
+                activeProductType === name ? 'bg-white/25' : 'bg-white text-gray-dark'
+              }`}>
+                {count}
+              </span>
             </button>
           ))}
-        </div> */}
-      </div>
+        </FilterRow>
+      )}
+
     </div>
   )
 }
@@ -415,11 +402,53 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   }, [browseMode, search, category, source, zoneFilter, fetchProducts])
 
   // ── Product type mode state ───────────────────────────────────────
-  // Data-driven from ledlum_products: Level 1 = collection (indoor/outdoor),
-  // Level 2 = group_name (the real, populated category field on every row).
-  const [activeCollection, setActiveCollection] = useState<string>('indoor')
+  // Fully data-driven from ledlum_products via /api/product-taxonomy — however
+  // many collections/group_names/product types actually exist in the DB is
+  // however many render, nothing here is a fixed/hardcoded list.
+  const [taxonomy, setTaxonomy]                 = useState<CollectionNode[]>([])
+  const [taxonomyLoading, setTaxonomyLoading]   = useState(true)
+  const [activeCollection, setActiveCollection] = useState<string>('')
   const [activeGroup, setActiveGroup]           = useState<string | null>(null)
+  const [activeProductType, setActiveProductType] = useState<string | null>(null)
   const [ptSearch, setPtSearch]                 = useState('')
+
+  // Fetch the taxonomy once; pick the largest collection as the default tab.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/product-taxonomy')
+      .then(res => res.json())
+      .then((data: CollectionNode[]) => {
+        if (cancelled) return
+        setTaxonomy(data)
+        setActiveCollection(prev => (prev && data.some(c => c.name === prev)) ? prev : (data[0]?.name ?? ''))
+      })
+      .catch(err => console.error('[CatalogPage] taxonomy fetch error:', err))
+      .finally(() => { if (!cancelled) setTaxonomyLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  // Second, independent product feed for product-type mode — server-side
+  // filtered by collection/groupName/productType + paginated (never the same
+  // `products` list zone mode uses, which is scoped/paginated differently).
+  const {
+    products: ptProducts, loading: ptLoading, loadingMore: ptLoadingMore,
+    hasMore: ptHasMore, loadMore: ptLoadMore, fetchProducts: fetchPtProducts,
+  } = useProducts(undefined, { skipCategories: true })
+
+  useEffect(() => {
+    if (browseMode !== 'product' || !activeCollection) return
+    const handle = setTimeout(() => {
+      fetchPtProducts({
+        collection: activeCollection,
+        groupName: activeGroup || undefined,
+        productType: activeProductType || undefined,
+        search: ptSearch || undefined,
+      })
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, ptSearch ? 300 : 0)
+    return () => clearTimeout(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browseMode, activeCollection, activeGroup, activeProductType, ptSearch, fetchPtProducts])
 
   // ── Shared ──────────────────────────────────────────────────────
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -431,33 +460,6 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     const p = products.find(p => p.id === initialProductId || p.Codes === initialProductId)
     if (p) setSelectedProduct(p)
   }, [initialProductId, products])
-
-  // ── Product type mode: collection → group_name, both from live data ──
-  const groupCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const p of products) {
-      if ((p.collection || 'indoor') !== activeCollection) continue
-      const name = p.Category || 'Uncategorized'
-      counts.set(name, (counts.get(name) ?? 0) + 1)
-    }
-    return Array.from(counts.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-  }, [products, activeCollection])
-
-  const ptProducts = useMemo(() => {
-    let list = products.filter(p => (p.collection || 'indoor') === activeCollection)
-    if (activeGroup) list = list.filter(p => p.Category === activeGroup)
-    if (ptSearch) {
-      const q = ptSearch.toLowerCase()
-      list = list.filter(p =>
-        p.Codes.toLowerCase().includes(q) ||
-        p.Category.toLowerCase().includes(q) ||
-        (p.Description ?? '').toLowerCase().includes(q)
-      )
-    }
-    return list
-  }, [products, activeCollection, activeGroup, ptSearch])
 
   // Zone mode filter
   const zoneProducts = useMemo(() => {
@@ -528,6 +530,11 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     }
   }, [modalMode, editingProduct, createProduct, updateProduct, toast, activeZone])
 
+  const activeCollectionNode = useMemo(
+    () => taxonomy.find(c => c.name === activeCollection) ?? null,
+    [taxonomy, activeCollection]
+  )
+
   const handleQuickAdd = useCallback((product: Product) => {
     if (!can('cart')) return
     addItem({
@@ -536,13 +543,15 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       productImage:       product.imageUrl ?? product.ImageLink ?? '',
       zone:               product.zone ?? activeZone ?? '',
       browseMode,
-      productCategory:    browseMode === 'product' ? collectionLabel(activeCollection) : undefined,
+      productCategory:    browseMode === 'product' ? (activeCollectionNode?.label ?? activeCollection) : undefined,
       productSubcategory: browseMode === 'product' ? activeGroup ?? undefined : undefined,
+      productTypeName:    browseMode === 'product' ? activeProductType ?? undefined : undefined,
+      productSpecs:       toCartProductSpecs(product),
       selection: {},
       quantity: 1,
     })
     toast(`${product.Codes} added to quote`, 'success')
-  }, [can, addItem, browseMode, activeCollection, activeGroup, activeZone, toast])
+  }, [can, addItem, browseMode, activeCollectionNode, activeCollection, activeGroup, activeProductType, activeZone, toast])
 
   const isVendorOrGuest = user?.role === 'vendor' || user?.role === 'guest'  // kept for cart banner only
 
@@ -582,17 +591,14 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       {/* ── Product type filter panel (product mode) ── */}
       {browseMode === 'product' && (
         <ProductTypePanel
-          collections={COLLECTIONS}
+          collections={taxonomy}
           activeCollection={activeCollection}
-          groupCounts={groupCounts}
-          activeGroup={activeGroup}
           onCollection={setActiveCollection}
+          activeGroup={activeGroup}
           onGroup={setActiveGroup}
-          productCount={ptProducts.length}
-          search={ptSearch}
-          onSearch={setPtSearch}
-          viewLayout={viewLayout}
-          onViewLayout={setViewLayout}
+          activeProductType={activeProductType}
+          onProductType={setActiveProductType}
+          loading={taxonomyLoading}
         />
       )}
 
@@ -607,7 +613,6 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
           onZoneFilter={setZoneFilter}
           showZoneFilter={!activeZone && user?.role === 'admin'}
         />
-      </div>
 
       {/* ── Welcome banner for vendors ── */}
       {can('cart') && (
@@ -715,8 +720,9 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         onEdit={() => selectedProduct && openEdit(selectedProduct)}
         onDelete={() => selectedProduct && handleDelete(selectedProduct)}
         browseMode={browseMode}
-        productCategory={browseMode === 'product' ? collectionLabel(activeCollection) : undefined}
+        productCategory={browseMode === 'product' ? (activeCollectionNode?.label ?? activeCollection) : undefined}
         productSubcategory={browseMode === 'product' ? activeGroup ?? undefined : undefined}
+        productTypeName={browseMode === 'product' ? activeProductType ?? undefined : undefined}
         activeZone={activeZone}
       />
 

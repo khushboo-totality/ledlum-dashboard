@@ -103,6 +103,16 @@ export interface CartSelection {
 // ── Cart ─────────────────────────────────────────────────────────────
 export type BrowseMode = 'zone' | 'product'
 
+// Snapshot of a product's real Supabase spec fields, captured at add-to-cart
+// time so the BOQ export can print real data instead of relying on the
+// (usually empty, for real-catalog products) ad-hoc `selection` config map.
+export interface CartProductSpecs {
+  watts?: string
+  beamAngle?: string
+  cct?: string          // joined, e.g. "3000K/4000K"
+  bodyColors?: string   // joined, e.g. "White/Matt Black"
+}
+
 export interface CartItem {
   id: string
   productCode: string
@@ -115,6 +125,7 @@ export interface CartItem {
   productCategory?: string        // e.g. "Indoor Lighting"
   productSubcategory?: string     // e.g. "Downlights"
   productTypeName?: string        // e.g. "Recessed Downlights"
+  productSpecs?: CartProductSpecs
   selection: CartSelection
   quantity: number
   addedAt: string

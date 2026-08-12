@@ -58,36 +58,41 @@ export default function CartDrawer() {
   }
 
   // Best-effort pull of a spec value out of the product's free-form config
-  // selection (keys are whatever the product's config options were named).
-  const specValue = (selection: Record<string, string>, ...keywords: string[]) => {
+  // selection (keys are whatever the product's config options were named) —
+  // takes priority when present (the user deliberately picked it), otherwise
+  // falls back to the product's real Supabase spec snapshot.
+  const specValue = (selection: Record<string, string>, ...keywords: string[]): string | undefined => {
     for (const [k, v] of Object.entries(selection)) {
       if (v && keywords.some(kw => k.toLowerCase().includes(kw))) return v
     }
-    return '—'
+    return undefined
   }
 
   const handleDownloadPDF = async () => {
     if (items.length === 0 || downloadingPdf) return
 
-    const rows: BoqRow[] = items.map((item, i) => ({
-      slNo: i + 1,
-      description: item.productName,
-      image: item.productImage,
-      type: item.productTypeName ?? item.productCategory ?? '—',
-      code: item.productCode,
-      watt: specValue(item.selection, 'watt'),
-      beam: specValue(item.selection, 'beam'),
-      cct: specValue(item.selection, 'cct', 'colour temp', 'color temp'),
-      auto: specValue(item.selection, 'auto', 'switch', 'driver'),
-      color: specValue(item.selection, 'color', 'colour', 'finish'),
-      qty: item.quantity,
-      unit: "NO'S",
-      // No pricing source yet in this app's data model — left at 0 until one exists.
-      mrp: 0,
-      disc: 0,
-      net: 0,
-      total: 0,
-    }))
+    const rows: BoqRow[] = items.map((item, i) => {
+      const specs = item.productSpecs
+      return {
+        slNo: i + 1,
+        description: item.productName,
+        image: item.productImage,
+        type: item.productTypeName ?? item.productCategory ?? '—',
+        code: item.productCode,
+        watt: specValue(item.selection, 'watt') ?? specs?.watts ?? '—',
+        beam: specValue(item.selection, 'beam') ?? specs?.beamAngle ?? '—',
+        cct: specValue(item.selection, 'cct', 'colour temp', 'color temp') ?? specs?.cct ?? '—',
+        auto: specValue(item.selection, 'auto', 'switch', 'driver') ?? '—',
+        color: specValue(item.selection, 'color', 'colour', 'finish') ?? specs?.bodyColors ?? '—',
+        qty: item.quantity,
+        unit: "NO'S",
+        // No pricing source yet in this app's data model — left at 0 until one exists.
+        mrp: 0,
+        disc: 0,
+        net: 0,
+        total: 0,
+      }
+    })
 
     // TODO: replace with real per-quote project details once available —
     // SAMPLE_META is a placeholder; only date/preparedBy/dealerName are
@@ -101,7 +106,7 @@ export default function CartDrawer() {
 
     setDownloadingPdf(true)
     try {
-      await downloadBoqPdf(meta, rows, `LEDLUM-Quote-${new Date().toISOString().slice(0, 10)}.pdf`)
+      await downloadBoqPdf(meta, rows, `LEDLUM-BOQ-${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (err) {
       console.error('[CartDrawer] PDF export failed:', err)
       toast('Failed to generate PDF', 'error')
@@ -269,7 +274,7 @@ export default function CartDrawer() {
                       <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
                   )}
-                  {downloadingPdf ? 'Generating…' : 'Download PDF'}
+                  {downloadingPdf ? 'Generating…' : 'Download BOQ'}
                 </button>
               )}
               <button onClick={() => { if (confirm('Clear all items from quote?')) clearCart() }}

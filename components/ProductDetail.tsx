@@ -10,6 +10,7 @@ import { getImageUrl } from '@/lib/auth'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
 import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
+import { toCartProductSpecs } from '@/lib/cartSpecs'
 import { downloadBoqPdf } from '@/lib/exportBoqPdf'
 
 interface Props {
@@ -190,6 +191,7 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
       productCategory:    browseMode === 'product' ? productCategory : undefined,
       productSubcategory: browseMode === 'product' ? productSubcategory : undefined,
       productTypeName:    browseMode === 'product' ? productTypeName : undefined,
+      productSpecs:       toCartProductSpecs(product),
       selection,
       quantity:           qty,
     })

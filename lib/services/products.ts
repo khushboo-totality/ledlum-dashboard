@@ -14,6 +14,22 @@ const JOIN_TABLE = 'ledlum_product_zone'
 const PAGE_SIZE = 1000
 const ID_CHUNK_SIZE = 300
 
+// ── In-memory cache for the two aggregate endpoints that otherwise do a
+// full table scan on every request (getCategories, getProductTaxonomy) —
+// that's what made a hard-refresh of the catalog slow. Scoped to this
+// module instance (works within one warm Fluid Compute instance; a cold
+// start or another instance just recomputes). Invalidated on any write so
+// admin edits show up without waiting out the TTL.
+const AGGREGATE_CACHE_TTL_MS = 60_000
+const taxonomyCache: { data: CollectionNode[] | null; expires: number } = { data: null, expires: 0 }
+const categoriesCache = new Map<string, { data: string[]; expires: number }>()
+
+function invalidateAggregateCaches(): void {
+  taxonomyCache.data = null
+  taxonomyCache.expires = 0
+  categoriesCache.clear()
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
@@ -356,6 +372,7 @@ export async function createProduct(data: ProductFormData): Promise<Product> {
   await setProductZones(row.id, zoneSlugs)
 
   const zoneMap = await getZoneSlugsForProductIds([row.id])
+  invalidateAggregateCaches()
   return mapRowToProduct(row as ProductRow, zoneMap.get(row.id) ?? [])
 }
 
@@ -401,6 +418,7 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
   else if (data.zone !== undefined) await setProductZones(numId, data.zone ? [data.zone] : [])
 
   const zoneMap = await getZoneSlugsForProductIds([numId])
+  invalidateAggregateCaches()
   return mapRowToProduct(row, zoneMap.get(numId) ?? [])
 }
 
@@ -409,10 +427,15 @@ export async function deleteProduct(id: string): Promise<boolean> {
   if (!Number.isFinite(numId)) return false
   const { error, count } = await supabaseAdmin.from(TABLE).delete({ count: 'exact' }).eq('id', numId)
   if (error) throw new Error(`Failed to delete product: ${error.message}`)
+  invalidateAggregateCaches()
   return (count ?? 0) > 0
 }
 
 export async function getCategories(zone?: string): Promise<string[]> {
+  const cacheKey = zone ?? '__all__'
+  const cached = categoriesCache.get(cacheKey)
+  if (cached && cached.expires > Date.now()) return cached.data
+
   let productIdFilter: number[] | null = null
   if (zone) {
     productIdFilter = await getProductIdsForZone(zone)
@@ -437,7 +460,9 @@ export async function getCategories(zone?: string): Promise<string[]> {
     for (const p of legacy) cats.add(p.Category)
   }
 
-  return Array.from(cats)
+  const result = Array.from(cats)
+  categoriesCache.set(cacheKey, { data: result, expires: Date.now() + AGGREGATE_CACHE_TTL_MS })
+  return result
 }
 
 export interface ProductTypeNode { name: string; count: number }
@@ -450,6 +475,8 @@ export interface CollectionNode { name: string; label: string; count: number; gr
  * the old hardcoded lib/productTaxonomy.ts mock tree.
  */
 export async function getProductTaxonomy(): Promise<CollectionNode[]> {
+  if (taxonomyCache.data && taxonomyCache.expires > Date.now()) return taxonomyCache.data
+
   const rows = await selectAllPages<{ collection: string | null; group_name: string | null; category: string | null }>(
     (from, to) => supabaseAdmin.from(TABLE).select('collection, group_name, category').range(from, to)
   )
@@ -468,7 +495,7 @@ export async function getProductTaxonomy(): Promise<CollectionNode[]> {
     else types.set('__none__', (types.get('__none__') ?? 0) + 1) // tracked for group count only, not exposed as a chip
   }
 
-  return Array.from(collections.entries()).map(([name, groups]) => {
+  const result = Array.from(collections.entries()).map(([name, groups]) => {
     const groupNames: GroupNameNode[] = Array.from(groups.entries()).map(([groupName, types]) => {
       const productTypes = Array.from(types.entries())
         .filter(([typeName]) => typeName !== '__none__')
@@ -486,6 +513,10 @@ export async function getProductTaxonomy(): Promise<CollectionNode[]> {
       groupNames,
     }
   }).sort((a, b) => b.count - a.count)
+
+  taxonomyCache.data = result
+  taxonomyCache.expires = Date.now() + AGGREGATE_CACHE_TTL_MS
+  return result
 }
 
 export async function getStats(zone?: string): Promise<Stats> {
