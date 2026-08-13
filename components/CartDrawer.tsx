@@ -7,6 +7,7 @@ import { useToast } from '@/context/ToastContext'
 import { useZones } from '@/context/ZonesContext'
 import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
 import { downloadBoqPdf } from '@/lib/exportBoqPdf'
+import { formatExtraSpecs } from '@/lib/cartSpecs'
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQty, clearCart } = useCart()
@@ -84,6 +85,13 @@ export default function CartDrawer() {
         cct: specValue(item.selection, 'cct', 'colour temp', 'color temp') ?? specs?.cct ?? '—',
         auto: specValue(item.selection, 'auto', 'switch', 'driver') ?? '—',
         color: specValue(item.selection, 'color', 'colour', 'finish') ?? specs?.bodyColors ?? '—',
+        family: specs?.family,
+        collection: specs?.collection,
+        ipRating: specs?.ipRating,
+        ledChip: specs?.ledChip,
+        cri: specs?.cri,
+        luminous: specs?.luminous,
+        specifications: formatExtraSpecs(specs?.extraSpecs),
         qty: item.quantity,
         unit: "NO'S",
         // No pricing source yet in this app's data model — left at 0 until one exists.

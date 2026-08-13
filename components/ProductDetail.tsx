@@ -10,7 +10,7 @@ import { getImageUrl } from '@/lib/auth'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
 import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
-import { toCartProductSpecs } from '@/lib/cartSpecs'
+import { toCartProductSpecs, formatExtraSpecs } from '@/lib/cartSpecs'
 import { downloadBoqPdf } from '@/lib/exportBoqPdf'
 
 interface Props {
@@ -152,6 +152,13 @@ Object.entries(detail.config ?? {}).forEach(([key, vals]) => {
       cct: prod.ColourTemp ?? (prod.cct?.length ? prod.cct.join('/') : '—'),
       auto: '—',
       color: prod.Finish ?? (prod.body_colors?.length ? prod.body_colors.join('/') : '—'),
+      family: prod.family ?? undefined,
+      collection: prod.collection,
+      ipRating: prod.ip_rating ?? undefined,
+      ledChip: prod.led_chip ?? undefined,
+      cri: prod.cri ?? undefined,
+      luminous: prod.luminous ?? undefined,
+      specifications: formatExtraSpecs(prod.extra_specs),
       qty: 1,
       unit: "NO'S",
       mrp: 0,

@@ -13,6 +13,13 @@ export type BoqRow = {
   cct: string;
   auto: string;
   color: string;
+  family?: string;
+  collection?: string; // indoor / outdoor
+  ipRating?: string;
+  ledChip?: string;
+  cri?: string;
+  luminous?: string;
+  specifications?: string; // free-form "Key: Value; Key: Value" from a product's extra_specs
   qty: number;
   unit: string;
   mrp: number;
@@ -66,6 +73,13 @@ const COLS = [
   { key: "cct", label: "CCT", className: "w-20 text-center" },
   { key: "auto", label: "Auto", className: "w-24 text-center" },
   { key: "color", label: "Color", className: "w-[130px] text-center" },
+  { key: "family", label: "Family", className: "w-28 text-center" },
+  { key: "collection", label: "Indoor/Outdoor", className: "w-24 text-center capitalize" },
+  { key: "ipRating", label: "IP Rating", className: "w-20 text-center" },
+  { key: "ledChip", label: "LED Chip", className: "w-24 text-center" },
+  { key: "cri", label: "CRI", className: "w-16 text-center" },
+  { key: "luminous", label: "Luminous", className: "w-24 text-center" },
+  { key: "specifications", label: "Specifications", className: "min-w-[220px] text-left" },
   { key: "qty", label: "Qty", className: "w-16 text-center" },
   { key: "unit", label: "Unit", className: "w-16 text-center" },
   { key: "mrp", label: "MRP (₹)", className: "w-24 text-right" },
@@ -126,6 +140,20 @@ function BoqCell({ colKey, row }: { colKey: ColKey; row: BoqRow }) {
       return <td className="px-3 py-6 text-center text-[#555]">{row.auto}</td>;
     case "color":
       return <td className="px-3 py-6 text-center uppercase text-[#555]">{row.color}</td>;
+    case "family":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.family}</td>;
+    case "collection":
+      return <td className="px-3 py-6 text-center capitalize text-[#555]">{row.collection}</td>;
+    case "ipRating":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.ipRating}</td>;
+    case "ledChip":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.ledChip}</td>;
+    case "cri":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.cri}</td>;
+    case "luminous":
+      return <td className="px-3 py-6 text-center text-[#555]">{row.luminous}</td>;
+    case "specifications":
+      return <td className="px-3 py-6 text-left text-[11.5px] leading-snug text-[#555]">{row.specifications}</td>;
     case "qty":
       return <td className="px-3 py-6 text-center last:pr-10">{row.qty}</td>;
     case "unit":

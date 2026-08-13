@@ -111,6 +111,14 @@ export interface CartProductSpecs {
   beamAngle?: string
   cct?: string          // joined, e.g. "3000K/4000K"
   bodyColors?: string   // joined, e.g. "White/Matt Black"
+  ipRating?: string
+  ledChip?: string
+  luminous?: string
+  cri?: string
+  family?: string
+  collection?: string   // indoor / outdoor
+  website?: string
+  extraSpecs?: Record<string, string>
 }
 
 export interface CartItem {
