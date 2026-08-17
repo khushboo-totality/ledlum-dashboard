@@ -77,7 +77,7 @@ export default function ZoneNav({ productCount }: ZoneNavProps) {
         </div>
       </header>
 
-      <div className="sticky top-[88px] z-30 border-b border-white/80 bg-white/85 px-4 backdrop-blur sm:top-16 sm:px-6 lg:px-8">
+      <div className="border-b border-white/80 bg-white/85 px-4 backdrop-blur sm:px-6 lg:px-8">
         <div className="flex items-center gap-2 overflow-x-auto py-3 scrollbar-hide">
           <button
             onClick={() => navigate('')}

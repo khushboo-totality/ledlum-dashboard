@@ -283,7 +283,7 @@ export async function listProducts(filters?: ProductFilters): Promise<ProductPag
     if (!filters?.zone && limit !== undefined) {
       // Unfiltered ("All Zones") + paginated: a real DB-level page, fetching
       // one extra row to know whether there's more without a separate count query.
-      let q = supabaseAdmin.from(TABLE).select('*').order('id', { ascending: false })
+      let q = supabaseAdmin.from(TABLE).select('*').order('id', { ascending: true })
       q = applyFilters(q)
       const { data, error } = await q.range(offset, offset + limit)
       if (error) throw new Error(error.message)
@@ -298,7 +298,7 @@ export async function listProducts(filters?: ProductFilters): Promise<ProductPag
       const idChunks = productIdFilter ? chunk(productIdFilter, ID_CHUNK_SIZE) : [null]
       for (const idBatch of idChunks) {
         const pageRows = await selectAllPages<ProductRow>((from, to) => {
-          let q = supabaseAdmin.from(TABLE).select('*').order('id', { ascending: false })
+          let q = supabaseAdmin.from(TABLE).select('*').order('id', { ascending: true })
           if (idBatch) q = q.in('id', idBatch)
           q = applyFilters(q)
           return q.range(from, to)

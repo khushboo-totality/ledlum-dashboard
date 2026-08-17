@@ -10,6 +10,7 @@ import { useProducts } from '@/lib/useProducts'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
 import { toCartProductSpecs } from '@/lib/cartSpecs'
+import { getZonePath } from '@/lib/zones'
 import Header from '@/components/Header'
 import ZoneNav from '@/components/ZoneNav'
 import Toolbar from '@/components/Toolbar'
@@ -19,7 +20,7 @@ import ProductDetail from '@/components/ProductDetail'
 import CrudModal from '@/components/CrudModal'
 import CartDrawer from '@/components/CartDrawer'
 import ToastContainer from '@/components/ToastContainer'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 type ViewLayout = 'grid' | 'list'
 
@@ -345,22 +346,48 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const activeZone     = zoneIdProp ?? ''
   const zone           = getZoneById(activeZone)
 
+  const [zoneFilter,setZoneFilter] = useState('')
   const [browseMode, setBrowseMode] = useState<BrowseMode>(initialMode)
   const [viewLayout, setViewLayout] = useState<ViewLayout>('grid')
   const pathname = usePathname()
+  const router = useRouter()
 
-  // ── Sticky filter stack offset ────────────────────────────────────
-  // Measured (not hardcoded) so it stays correct whether Header or ZoneNav's
-  // two-bar stack is showing, and across breakpoints where they wrap taller.
+  // Zone mode's "Category" filter is a real zone switch (same as ZoneNav's
+  // pill row) — not a client-side filter — so the URL, header, and pill
+  // highlighting all stay in sync with whichever zone's products are shown.
+  const handleZoneSelect = useCallback((zoneId: string) => {
+    router.push(zoneId ? `/zone/${getZonePath(zoneId)}` : '/zone')
+  }, [router])
+
+  // ── Sticky toolbar offset ──────────────────────────────────────────
+  // Measured (not hardcoded) so it stays correct across breakpoints where
+  // Header/ZoneNav wrap taller. Only counts children that are actually
+  // `position: sticky` — ZoneNav renders its logo header (sticky) AND its
+  // zone-tabs row (NOT sticky, scrolls away normally), so summing every
+  // child's height would overcount and leave Toolbar sticking too far down,
+  // opening a gap once the zone-tabs row scrolls out of view.
+  // NOTE: headerRef's wrapper div renders with `display: contents` (see JSX
+  // below) so it never becomes an actual box in the layout. A normal div
+  // here would be exactly as tall as Header/ZoneNav and nothing else — and
+  // position:sticky elements can only stay stuck within their containing
+  // block's box, so a tightly-fit wrapper silently caps them to a few
+  // pixels of scroll before they get shoved off along with it. `contents`
+  // makes Header/ZoneNav's containing block the full-height page div
+  // instead, so they can stay stuck for the whole scroll like they should.
   const headerRef = useRef<HTMLDivElement>(null)
   const [headerHeight, setHeaderHeight] = useState(0)
   useEffect(() => {
-    const el = headerRef.current
-    if (!el) return
-    const update = () => setHeaderHeight(el.offsetHeight)
+    const container = headerRef.current
+    if (!container) return
+    const children = Array.from(container.children) as HTMLElement[]
+    const update = () => {
+      setHeaderHeight(children.reduce((sum, child) => (
+        getComputedStyle(child).position === 'sticky' ? sum + child.getBoundingClientRect().height : sum
+      ), 0))
+    }
     update()
     const ro = new ResizeObserver(update)
-    ro.observe(el)
+    children.forEach(child => ro.observe(child))
     window.addEventListener('resize', update)
     return () => { ro.disconnect(); window.removeEventListener('resize', update) }
   }, [browseMode])
@@ -382,10 +409,13 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const [search, setSearch]         = useState('')
   const [category, setCategory]     = useState('')
   const [source, setSource]         = useState('')
-  const [zoneFilter, setZoneFilter] = useState('')  // admin zone filter for all-zones view
 
   // Re-fetch (from page 1) whenever a zone-mode filter changes — server-side
   // filtering + pagination, replacing the old client-only useMemo filter.
+  // Switching zones is a real navigation (see handleZoneSelect below), not a
+  // filter here — activeZone changing already gives useProducts a new `zone`
+  // binding, which re-triggers this effect via the changed `fetchProducts`
+  // identity.
   useEffect(() => {
     if (browseMode !== 'zone') return
     const handle = setTimeout(() => {
@@ -393,13 +423,12 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         search: search || undefined,
         category: category || undefined,
         source: source || undefined,
-        zone: zoneFilter || undefined,
       })
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, search ? 300 : 0) // debounce free-text search only
     return () => clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [browseMode, search, category, source, zoneFilter, fetchProducts])
+  }, [browseMode, search, category, source, fetchProducts])
 
   // ── Product type mode state ───────────────────────────────────────
   // Fully data-driven from ledlum_products via /api/product-taxonomy — however
@@ -443,12 +472,13 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         groupName: activeGroup || undefined,
         productType: activeProductType || undefined,
         search: ptSearch || undefined,
+        source: source || undefined,
       })
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, ptSearch ? 300 : 0)
     return () => clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [browseMode, activeCollection, activeGroup, activeProductType, ptSearch, fetchPtProducts])
+  }, [browseMode, activeCollection, activeGroup, activeProductType, ptSearch, source, fetchPtProducts])
 
   // ── Shared ──────────────────────────────────────────────────────
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -464,8 +494,6 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   // Zone mode filter
   const zoneProducts = useMemo(() => {
     let list = [...products]
-    // Admin viewing all zones can filter by zone
-    if (zoneFilter) list = list.filter(p => p.zone === zoneFilter)
     if (search) {
       const q = search.toLowerCase()
       list = list.filter(p =>
@@ -475,7 +503,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     if (category) list = list.filter(p => p.Category === category)
     if (source)   list = list.filter(p => p.source === source)
     return list
-  }, [products, search, category, source, zoneFilter])
+  }, [products, search, category, source])
 
   const displayedProducts = browseMode === 'zone' ? zoneProducts : ptProducts
   const productCount       = displayedProducts.length
@@ -499,6 +527,8 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const loadMoreRef = useRef(displayedLoadMore)
   useEffect(() => { loadMoreRef.current = displayedLoadMore }, [displayedLoadMore])
 
+  console.log("productCount",displayedProducts)
+
   useEffect(() => {
     const el = loadMoreSentinelRef.current
     if (!el) return
@@ -510,11 +540,35 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     return () => observer.disconnect()
   }, [])
 
+  // IntersectionObserver only fires on enter/exit *transitions* — if the
+  // sentinel stays continuously inside the 400px trigger zone across a load
+  // (e.g. a wide grid where a 20-item page doesn't add enough height to push
+  // the sentinel back out), it never re-enters and loadMore silently stalls
+  // after one page. After every product-list change, re-check the sentinel's
+  // position directly and fire loadMore again if it's still in range.
+  useEffect(() => {
+    if (displayedLoadingMore || !displayedHasMore) return
+    const el = loadMoreSentinelRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    if (rect.top <= window.innerHeight + 400) loadMoreRef.current()
+  }, [displayedProducts.length, displayedLoadingMore, displayedHasMore])
+
   // ── Handlers ────────────────────────────────────────────────────
   const handleModeChange = (m: BrowseMode) => {
     setBrowseMode(m)
     onModeChange?.(m)
   }
+
+  // Product-mode taxonomy pickers — shared by ProductTypePanel's pill row
+  // and the Toolbar filter drawer's Category/Subcategory selects, so both
+  // reset the lower taxonomy levels the same way when a higher one changes.
+  const handleTaxonomyCollection = useCallback((c: string) => {
+    setActiveCollection(c); setActiveGroup(null); setActiveProductType(null)
+  }, [])
+  const handleTaxonomyGroup = useCallback((g: string | null) => {
+    setActiveGroup(g); setActiveProductType(null)
+  }, [])
 
   const openEdit = useCallback((product: Product) => {
     if (!can('edit')) { toast('Permission denied', 'error'); return }
@@ -570,8 +624,10 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
   return (
     <div className="min-h-screen app-shell">
-      {/* Header — only in product mode; zone mode has its own header inside ZoneNav */}
-      <div ref={headerRef}>
+      {/* Header — only in product mode; zone mode has its own header inside
+          ZoneNav. `contents` so this wrapper never becomes a box that caps
+          how far its sticky children (Header/ZoneNav's bars) can stick. */}
+      <div ref={headerRef} className="contents">
         {browseMode === 'product' && <Header productCount={productCount} />}
 
         {/* ── Zone tabs + header (zone mode) ── */}
@@ -601,7 +657,8 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
 </div>
 
-      {/* ── Product type filter panel (product mode) ── */}
+      {/* ── Product type filter panel (product mode) — scrolls away normally;
+          only Toolbar below it stays sticky. ── */}
       {browseMode === 'product' && (
         <ProductTypePanel
           collections={taxonomy}
@@ -616,7 +673,9 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       )}
 
         <Toolbar
-          search={search}     onSearch={setSearch}
+          stickyTop={headerHeight}
+          search={browseMode === 'zone' ? search : ptSearch}
+          onSearch={browseMode === 'zone' ? setSearch : setPtSearch}
           category={category} onCategory={setCategory}
           source={source}     onSource={setSource}
           categories={categories}
@@ -624,7 +683,15 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
           onAdd={() => setModalMode('create')}
           zoneFilter={zoneFilter}
           onZoneFilter={setZoneFilter}
-          showZoneFilter={!activeZone && user?.role === 'admin'}
+          showZoneFilter={browseMode === 'zone' && !activeZone && user?.role === 'admin'}
+          showCategoryFilter={browseMode === 'zone'}
+          productTaxonomy={browseMode === 'product' ? {
+            collections: taxonomy,
+            activeCollection,
+            onCollection: handleTaxonomyCollection,
+            activeGroup,
+            onGroup: handleTaxonomyGroup,
+          } : undefined}
         />
 
       {/* ── Welcome banner for vendors ── */}

@@ -37,7 +37,7 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
             alt={displayCode}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            className="pointer-events-none object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+            className="pointer-events-none object-contain transition-transform duration-500 group-hover:scale-[1.05]"
             onError={() => setImgError(true)}
           />
         ) : (
