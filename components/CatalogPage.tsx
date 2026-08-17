@@ -484,18 +484,31 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const displayedHasMore   = browseMode === 'zone' ? hasMore : ptHasMore
   const displayedLoadMore  = browseMode === 'zone' ? loadMore : ptLoadMore
 
-  // ── Infinite scroll (20 at a time, both modes) ────────────────────
+  // ── Infinite scroll (20 at a time, both modes) ─────────────────────
+  // The observer is created ONCE and left alone — it must NOT be recreated
+  // on every load. A freshly-created IntersectionObserver fires immediately
+  // for a target that's already intersecting, so recreating it whenever
+  // `displayedLoadMore` or `displayedProducts.length` changed (both change
+  // on every successful load) turned this into a runaway loop: load 20 →
+  // observer recreated → fires immediately (sentinel still in view) → load
+  // 20 more → repeat — silently pulling in the ENTIRE result set (up to
+  // ~1700 rows) instead of 20 at a time, which is what was blowing up the
+  // browser once real product images were involved (ERR_INSUFFICIENT_RESOURCES
+  // / out-of-memory from hundreds of concurrent image requests).
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null)
+  const loadMoreRef = useRef(displayedLoadMore)
+  useEffect(() => { loadMoreRef.current = displayedLoadMore }, [displayedLoadMore])
+
   useEffect(() => {
     const el = loadMoreSentinelRef.current
     if (!el) return
     const observer = new IntersectionObserver(
-      entries => { if (entries[0]?.isIntersecting) displayedLoadMore() },
+      entries => { if (entries[0]?.isIntersecting) loadMoreRef.current() },
       { rootMargin: '400px' }
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [browseMode, displayedLoadMore, displayedProducts.length])
+  }, [])
 
   // ── Handlers ────────────────────────────────────────────────────
   const handleModeChange = (m: BrowseMode) => {
@@ -703,9 +716,14 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
           </div>
         )}
 
-        {/* Infinite-scroll trigger + "loading more" indicator */}
-        {(displayedHasMore || displayedLoadingMore) && (
-          <div ref={loadMoreSentinelRef} className="flex justify-center py-8">
+        {/* Infinite-scroll sentinel — always mounted (not conditional on
+            hasMore/loadingMore) so its DOM node — and the IntersectionObserver
+            watching it — persist across loads instead of being torn down and
+            recreated on every batch. loadMore() itself already no-ops once
+            hasMore is false, so an always-present sentinel is safe. */}
+        <div ref={loadMoreSentinelRef} className="h-px" />
+        {displayedLoadingMore && (
+          <div className="flex justify-center py-8">
             <div className="flex items-center gap-2 text-xs text-gray-dark font-pop">
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-mid border-t-primary" />
               Loading more…
