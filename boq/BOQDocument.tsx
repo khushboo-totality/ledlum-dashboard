@@ -2,24 +2,16 @@
 // Tailwind CSS (v3+). Load Poppins (400/500/600/700) in the host document's <head>:
 // https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap
 
+import type { ReactNode } from "react";
+import { formatColumnTitle } from "@/lib/productColumns";
+
 export type BoqRow = {
   slNo: number;
-  description: string;
   image?: string;
-  type: string;
-  code: string;
-  watt: string;
-  beam: string;
-  cct: string;
-  auto: string;
-  color: string;
-  family?: string;
-  collection?: string; // indoor / outdoor
-  ipRating?: string;
-  ledChip?: string;
-  cri?: string;
-  luminous?: string;
-  specifications?: string; // free-form "Key: Value; Key: Value" from a product's extra_specs
+  /** DB column -> display value (see lib/productColumns.ts), in table order. */
+  attributes: Record<string, string>;
+  /** extra_specs key -> value; each key becomes its own column. */
+  specs: Record<string, string>;
   qty: number;
   unit: string;
   mrp: number;
@@ -48,6 +40,8 @@ export type BoqMeta = {
   architectPan: string;
   dealerName: string;
   companyAddress: string;
+  /** Prepared (cropped, white-on-dark) logo data URL — see prepareLogoForDarkHeader. */
+  logo?: string;
 };
 
 export const TERMS = [
@@ -62,111 +56,71 @@ export const TERMS = [
 const inr = (n: number) =>
   n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const COLS = [
-  { key: "slNo", label: "Sl.No", className: "w-14 text-left" },
-  { key: "description", label: "Product Description", className: "min-w-[220px] text-left" },
-  { key: "image", label: "Product Image", className: "w-[130px] text-center" },
-  { key: "type", label: "Type", className: "w-20 text-center" },
-  { key: "code", label: "Code", className: "w-28 text-center" },
-  { key: "watt", label: "Watt", className: "w-20 text-center" },
-  { key: "beam", label: "Beam", className: "w-20 text-center" },
-  { key: "cct", label: "CCT", className: "w-20 text-center" },
-  { key: "auto", label: "Auto", className: "w-24 text-center" },
-  { key: "color", label: "Color", className: "w-[130px] text-center" },
-  { key: "family", label: "Family", className: "w-28 text-center" },
-  { key: "collection", label: "Indoor/Outdoor", className: "w-24 text-center capitalize" },
-  { key: "ipRating", label: "IP Rating", className: "w-20 text-center" },
-  { key: "ledChip", label: "LED Chip", className: "w-24 text-center" },
-  { key: "cri", label: "CRI", className: "w-16 text-center" },
-  { key: "luminous", label: "Luminous", className: "w-24 text-center" },
-  { key: "specifications", label: "Specifications", className: "min-w-[220px] text-left" },
-  { key: "qty", label: "Qty", className: "w-16 text-center" },
-  { key: "unit", label: "Unit", className: "w-16 text-center" },
-  { key: "mrp", label: "MRP (₹)", className: "w-24 text-right" },
-  { key: "disc", label: "Disc", className: "w-16 text-right" },
-  { key: "net", label: "Net (₹)", className: "w-24 text-right" },
-  { key: "total", label: "Total (₹)", className: "w-[116px] text-right" },
-] as const;
+type BoqCol = {
+  id: string;
+  label: string;
+  className: string;
+  render: (row: BoqRow) => ReactNode;
+};
 
-type ColKey = (typeof COLS)[number]["key"];
+const td = "px-3 py-6";
 
-// Always shown regardless of data — everything else only appears if at
-// least one row actually has a value for it (so a single-product download
-// only shows the columns that product's data actually populates).
-const ALWAYS_VISIBLE_COLS = new Set<ColKey>(["slNo", "description", "qty", "unit"]);
+// Fixed columns around the data-driven ones. Everything between Image and
+// Qty comes from the product table itself (see buildColumns).
+const SL_NO_COL: BoqCol = { id: "slNo", label: "Sl.No", className: "w-14 text-left", render: (r) => r.slNo };
+const IMAGE_COL: BoqCol = {
+  id: "image",
+  label: "Product Image",
+  className: "w-[130px] text-center",
+  render: (r) => (
+    <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden border border-black/[0.06] bg-white">
+      {r.image ? (
+        <img src={r.image} alt="" width={80} height={80} className="block" />
+      ) : (
+        <span className="text-[10px] uppercase tracking-wide text-black/25">Image</span>
+      )}
+    </div>
+  ),
+};
+const QTY_COLS: BoqCol[] = [
+  { id: "qty", label: "Qty", className: "w-16 text-center", render: (r) => r.qty },
+  { id: "unit", label: "Unit", className: "w-16 text-center", render: (r) => r.unit },
+];
+// Only shown once real pricing exists (hidden while every row is 0).
+const PRICE_COLS: (BoqCol & { value: (r: BoqRow) => number })[] = [
+  { id: "mrp", label: "MRP (₹)", className: "w-24 text-right", value: (r) => r.mrp, render: (r) => inr(r.mrp) },
+  { id: "disc", label: "Disc", className: "w-16 text-right", value: (r) => r.disc, render: (r) => `${r.disc}%` },
+  { id: "net", label: "Net (₹)", className: "w-24 text-right", value: (r) => r.net, render: (r) => inr(r.net) },
+  { id: "total", label: "Total (₹)", className: "w-[116px] text-right font-bold", value: (r) => r.total, render: (r) => inr(r.total) },
+];
 
-function hasValue(v: unknown): boolean {
-  if (v === undefined || v === null) return false;
-  if (typeof v === "string") return v.trim() !== "" && v.trim() !== "—" && v.trim() !== "-";
-  if (typeof v === "number") return v !== 0;
-  return true;
+/** Keys across all rows, in first-seen order (so the table's column order is kept). */
+function unionKeys(maps: Record<string, string>[]): string[] {
+  const seen = new Set<string>();
+  for (const m of maps) for (const k of Object.keys(m)) seen.add(k);
+  return Array.from(seen);
 }
 
-function getVisibleCols(rows: BoqRow[]) {
-  return COLS.filter(
-    (c) => ALWAYS_VISIBLE_COLS.has(c.key) || rows.some((r) => hasValue(r[c.key as keyof BoqRow]))
-  );
-}
-
-function BoqCell({ colKey, row }: { colKey: ColKey; row: BoqRow }) {
-  switch (colKey) {
-    case "slNo":
-      return <td className="px-3 py-6 text-[#555] first:pl-10">{row.slNo}</td>;
-    case "description":
-      return <td className="px-3 py-6 font-semibold uppercase tracking-[0.02em]">{row.description}</td>;
-    case "image":
-      return (
-        <td className="px-3 py-6">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden border border-black/[0.06] bg-white">
-            {row.image ? (
-              <img src={row.image} alt={row.description} className="h-full w-full object-contain" />
-            ) : (
-              <span className="text-[10px] uppercase tracking-wide text-black/25">Image</span>
-            )}
-          </div>
-        </td>
-      );
-    case "type":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.type}</td>;
-    case "code":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.code}</td>;
-    case "watt":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.watt}</td>;
-    case "beam":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.beam}</td>;
-    case "cct":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.cct}</td>;
-    case "auto":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.auto}</td>;
-    case "color":
-      return <td className="px-3 py-6 text-center uppercase text-[#555]">{row.color}</td>;
-    case "family":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.family}</td>;
-    case "collection":
-      return <td className="px-3 py-6 text-center capitalize text-[#555]">{row.collection}</td>;
-    case "ipRating":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.ipRating}</td>;
-    case "ledChip":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.ledChip}</td>;
-    case "cri":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.cri}</td>;
-    case "luminous":
-      return <td className="px-3 py-6 text-center text-[#555]">{row.luminous}</td>;
-    case "specifications":
-      return <td className="px-3 py-6 text-left text-[11.5px] leading-snug text-[#555]">{row.specifications}</td>;
-    case "qty":
-      return <td className="px-3 py-6 text-center last:pr-10">{row.qty}</td>;
-    case "unit":
-      return <td className="px-3 py-6 text-center text-[#555] last:pr-10">{row.unit}</td>;
-    case "mrp":
-      return <td className="px-3 py-6 text-right text-[#555]">{inr(row.mrp)}</td>;
-    case "disc":
-      return <td className="px-3 py-6 text-right font-semibold text-[#d4622a]">{row.disc}%</td>;
-    case "net":
-      return <td className="px-3 py-6 text-right text-[#555]">{inr(row.net)}</td>;
-    case "total":
-      return <td className="px-3 py-6 pr-10 text-right font-bold last:pr-10">{inr(row.total)}</td>;
-  }
+/**
+ * Column set for the whole document (computed once across all rows so every
+ * page has the same columns): the product table's own columns, then one
+ * column per extra_specs key, titled from the key itself.
+ */
+function buildColumns(rows: BoqRow[]): BoqCol[] {
+  const attrCols: BoqCol[] = unionKeys(rows.map((r) => r.attributes)).map((key) => ({
+    id: `attr:${key}`,
+    label: formatColumnTitle(key),
+    className: key === "model" ? "min-w-[110px] text-center font-semibold" : "min-w-[90px] text-center",
+    render: (r) => r.attributes[key] ?? "—",
+  }));
+  const specCols: BoqCol[] = unionKeys(rows.map((r) => r.specs)).map((key) => ({
+    id: `spec:${key}`,
+    label: formatColumnTitle(key),
+    className: "min-w-[90px] text-center",
+    render: (r) => r.specs[key] ?? "—",
+  }));
+  const priceCols = PRICE_COLS.filter((c) => rows.some((r) => c.value(r) !== 0));
+  return [SL_NO_COL, IMAGE_COL, ...attrCols, ...specCols, ...QTY_COLS, ...priceCols];
 }
 
 function MetaField({ label, value }: { label: string; value: string }) {
@@ -195,12 +149,11 @@ function Masthead({ meta }: { meta: BoqMeta }) {
   return (
     <header className="bg-[#12100f] px-10 pt-8 pb-0">
       <div className="flex items-start justify-between gap-12 pb-7">
-        <div className="flex items-center gap-3">
-          <svg viewBox="0 0 32 32" className="h-8 w-8 shrink-0" aria-hidden="true">
-            <path d="M16 3v26M3 16h26" stroke="#d4622a" strokeWidth="5" strokeLinecap="round" />
-          </svg>
+        {meta.logo ? (
+          <img src={meta.logo} alt="LEDLUM" className="block h-14 w-auto" />
+        ) : (
           <span className="text-3xl font-bold tracking-[0.06em] text-white">LEDLUM</span>
-        </div>
+        )}
 
         <div className="grid grid-cols-[repeat(3,auto)] gap-x-14 gap-y-3">
           <MetaField label="Date" value={meta.date} />
@@ -236,7 +189,7 @@ function BoqPage({
 }: {
   meta: BoqMeta;
   rows: BoqRow[];
-  visibleCols: typeof COLS[number][];
+  visibleCols: BoqCol[];
   pageNo: number;
   pageCount: number;
   isLast: boolean;
@@ -258,8 +211,8 @@ function BoqPage({
           <tr className="bg-[#12100f]">
             {visibleCols.map((c) => (
               <th
-                key={c.key}
-                className={`${c.className} whitespace-nowrap px-3 py-4 text-[11.5px] font-medium uppercase tracking-[0.06em] text-white first:pl-10 last:pr-10`}
+                key={c.id}
+                className={`${c.className} whitespace-nowrap px-3 py-4 text-[12px] font-semibold tracking-[0.03em] text-white first:pl-10 last:pr-10`}
               >
                 {c.label}
               </th>
@@ -273,7 +226,9 @@ function BoqPage({
               className={`border-b border-black/10 ${(startIndex + i) % 2 ? "bg-[#f7f7f7]" : "bg-white"}`}
             >
               {visibleCols.map((c) => (
-                <BoqCell key={c.key} colKey={c.key} row={r} />
+                <td key={c.id} className={`${c.className} ${td} text-[#555] first:pl-10 last:pr-10`}>
+                  {c.render(r)}
+                </td>
               ))}
             </tr>
           ))}
@@ -368,7 +323,7 @@ export default function BOQDocument({
 
   // Computed once across all rows so the column set stays consistent across
   // pages of a multi-page document, not just what a single page happens to have.
-  const visibleCols = getVisibleCols(rows);
+  const visibleCols = buildColumns(rows);
 
   return (
     <div className="overflow-x-auto bg-white">
@@ -412,21 +367,3 @@ export const SAMPLE_TOTALS: BoqTotals = {
   grand: 336003,
   words: "Rupees Three Lakhs Thirty Six Thousand Three Only",
 };
-
-export const SAMPLE_ROWS: BoqRow[] = [
-  { slNo: 1, description: "Adjustable Downlight", type: "DL-1", code: "LLF-1013", watt: "12W", beam: "60°", cct: "3000K", auto: "ON-OFF", color: "Black Chrome", qty: 8, unit: "NO'S", mrp: 1690, disc: 40, net: 1014, total: 8112 },
-  { slNo: 2, description: "Adjustable Wall Washer", type: "DL-2", code: "LLF-104", watt: "20W", beam: "24°", cct: "3000K", auto: "ON-OFF", color: "White", qty: 19, unit: "NO'S", mrp: 3800, disc: 40, net: 2280, total: 43320 },
-  { slNo: 3, description: "Recessed Downlight", type: "DL-3", code: "LLF-1027", watt: "9W", beam: "50°", cct: "3000K", auto: "ON-OFF", color: "Matt Black", qty: 6, unit: "NO'S", mrp: 1790, disc: 40, net: 1074, total: 6444 },
-  { slNo: 4, description: "Adjustable Downlight", type: "DL-4", code: "LLF-1010", watt: "9W", beam: "15°", cct: "3000K", auto: "ON-OFF", color: "Black Chrome", qty: 8, unit: "NO'S", mrp: 1520, disc: 40, net: 912, total: 7296 },
-  { slNo: 5, description: "Recessed Wall Washer", type: "DL-5", code: "LLF-1022", watt: "12W", beam: "—", cct: "3000K", auto: "ON-OFF", color: "Black", qty: 11, unit: "NO'S", mrp: 2960, disc: 40, net: 1776, total: 19536 },
-  { slNo: 6, description: "Trimless Downlight", type: "DL-6", code: "LLA-014+LLA-017A", watt: "8W", beam: "15°", cct: "3000K", auto: "ON-OFF", color: "Black", qty: 5, unit: "NO'S", mrp: 3150, disc: 40, net: 1890, total: 9450 },
-  { slNo: 7, description: "Adjustable Downlight", type: "DL-7", code: "LLF-1013", watt: "12W", beam: "60°", cct: "3000K", auto: "ON-OFF", color: "Black Chrome", qty: 11, unit: "NO'S", mrp: 1690, disc: 40, net: 1014, total: 11154 },
-  { slNo: 8, description: "Adjustable Downlight", type: "DL-8", code: "LLF-1013", watt: "12W", beam: "36°", cct: "3000K", auto: "ON-OFF", color: "Black Chrome", qty: 11, unit: "NO'S", mrp: 1690, disc: 40, net: 1014, total: 11154 },
-  { slNo: 9, description: "Adjustable Downlight", type: "DL-9", code: "LLF-300C", watt: "12W", beam: "24°", cct: "3000K", auto: "ON-OFF", color: "Black", qty: 11, unit: "NO'S", mrp: 2470, disc: 40, net: 1482, total: 16302 },
-  { slNo: 10, description: "Recessed Downlight", type: "DL-10", code: "LLF-1007", watt: "5W", beam: "15°", cct: "3000K", auto: "DT-6", color: "Black Chrome", qty: 8, unit: "NO'S", mrp: 4030, disc: 40, net: 2418, total: 19344 },
-  { slNo: 17, description: "Linear Suspended Light", type: "PL-1", code: "LLT-041", watt: "36W", beam: "60°", cct: "3000K", auto: "ON-OFF", color: "Black", qty: 1, unit: "NO'S", mrp: 4000, disc: 40, net: 2400, total: 2400 },
-  { slNo: 18, description: "Driver", type: "LLA-248", code: "—", watt: "100W", beam: "—", cct: "—", auto: "—", color: "Black", qty: 4, unit: "NO'S", mrp: 3300, disc: 40, net: 1980, total: 7920 },
-  { slNo: 19, description: "Driver", type: "LLA-249", code: "—", watt: "200W", beam: "—", cct: "—", auto: "—", color: "Black", qty: 2, unit: "NO'S", mrp: 4150, disc: 40, net: 2490, total: 4980 },
-  { slNo: 20, description: "Endcap", type: "LLA-239", code: "—", watt: "—", beam: "—", cct: "—", auto: "—", color: "Black", qty: 7, unit: "NO'S", mrp: 50, disc: 40, net: 30, total: 210 },
-  { slNo: 21, description: "1M Track Cover", type: "LLA-235", code: "—", watt: "—", beam: "—", cct: "—", auto: "—", color: "Black", qty: 18, unit: "NO'S", mrp: 170, disc: 40, net: 102, total: 1836 },
-];

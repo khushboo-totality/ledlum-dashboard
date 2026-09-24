@@ -45,3 +45,9 @@ export function getImageUrl(link: string): string | null {
   }
   return link.startsWith('http') ? link : null
 }
+
+/** placehold.co (demo gallery in productDetails.ts) serves SVG, which the
+ * next/image optimizer rejects — render those as-is instead. */
+export function skipImageOptimization(src: string): boolean {
+  return src.includes('placehold.co')
+}

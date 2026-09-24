@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { CollectionNode } from '@/lib/services/products'
 import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
 import LedlumLogo from './LedlumLogo'
@@ -18,11 +19,27 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
 
   useEffect(() => { zoneRef.current?.focus() }, [])
 
+  // Live category list (ledlum_products.collection) — new collections show up here automatically.
+  const [collections, setCollections] = useState<CollectionNode[]>([])
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/product-taxonomy')
+      .then(res => res.json())
+      .then((data: CollectionNode[]) => { if (!cancelled) setCollections(data) })
+      .catch(err => console.error('[BrowseChooser] taxonomy fetch error:', err))
+    return () => { cancelled = true }
+  }, [])
+  const MAX_CHIPS = 4
+  const categoryChips = [
+    ...collections.slice(0, MAX_CHIPS).map(c => c.label),
+    ...(collections.length > MAX_CHIPS ? [`+${collections.length - MAX_CHIPS} more`] : []),
+  ]
+
   return (
     <div className="min-h-screen app-shell font-bai">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
         <div className="glass-panel sticky top-4 z-40 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/80 px-4 py-3 shadow-card sm:px-5">
-          <LedlumLogo className="h-8 w-auto" />
+          <LedlumLogo className="h-10 w-auto" />
 
           <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             {can('cart') && (
@@ -100,7 +117,7 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
             <div className="grid grid-cols-1 gap-3 w-full max-w-xs">
               {[
                 ['15+', 'Zones'],
-                ['8', 'Categories'],
+                [collections.length ? String(collections.length) : '—', 'Categories'],
                 [can('cart') ? String(total) : 'Live', can('cart') ? 'Quote items' : 'Catalog'],
               ].map(([value, label]) => (
                 <div key={label} className="rounded-2xl flex items-center justify-between border border-white/80 bg-white/70 px-4 py-3 shadow-card">
@@ -178,7 +195,7 @@ export default function BrowseChooser({ onChooseZone, onChooseProduct }: Props) 
                 </svg>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {['Indoor', 'Outdoor', 'Architectural', 'Smart', '+4 more'].map(c => (
+                {categoryChips.map(c => (
                   <span key={c} className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white/70 font-pop">
                     {c}
                   </span>

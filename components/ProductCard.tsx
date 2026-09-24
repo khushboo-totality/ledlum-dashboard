@@ -1,6 +1,6 @@
 'use client'
 
-import Image from 'next/image'
+import ProgressiveImage from './ProgressiveImage'
 import { useState } from 'react'
 import type { Product } from '@/types'
 import { useAuth } from '@/context/AuthContext'
@@ -26,17 +26,18 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
 
   return (
     <div
-      className="group relative cursor-pointer overflow-hidden rounded-2xl border border-white/80 bg-white shadow-card animate-card-in transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-card-hover focus-within:ring-4 focus-within:ring-primary/10"
+      className="card-cv group relative cursor-pointer overflow-hidden rounded-2xl border border-white/80 bg-white shadow-card animate-card-in transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-card-hover focus-within:ring-4 focus-within:ring-primary/10"
       style={{ animationDelay: delay }}
       onClick={onClick}
     >
-      <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gray">
+      <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-white">
         {imgUrl && !imgError ? (
-          <Image
+          <ProgressiveImage
+            key={imgUrl}
             src={imgUrl}
             alt={displayCode}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            variant="card"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px"
             className="pointer-events-none object-contain transition-transform duration-500 group-hover:scale-[1.05]"
             onError={() => setImgError(true)}
           />

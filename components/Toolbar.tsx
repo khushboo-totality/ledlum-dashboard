@@ -90,7 +90,7 @@ export default function Toolbar({
 
   return (
     <>
-    <div className="sticky z-20 border-b border-white/80 bg-white/70 px-4 py-4 backdrop-blur sm:px-6 lg:px-8" style={{ top: stickyTop }}>
+    <div className="sticky z-20 border-b border-white/80 bg-[#fbfbf9] px-4 py-4 sm:px-6 lg:px-8" style={{ top: stickyTop }}>
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <svg className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-dark" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

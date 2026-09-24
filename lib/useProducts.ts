@@ -29,13 +29,19 @@ export interface UseProductsOptions {
 export function useProducts(zone?: string, options?: UseProductsOptions) {
   const skipCategories = options?.skipCategories ?? false
   const [products, setProducts]       = useState<Product[]>([])
-  const [loading, setLoading]         = useState(false)
+  // true until the first fetch settles, so the UI shows a skeleton — not
+  // "No products found" — before anything has been requested yet.
+  const [loading, setLoading]         = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore]         = useState(false)
   const [categories, setCategories]   = useState<string[]>([])
 
   const offsetRef  = useRef(0)
   const filtersRef = useRef<ProductQueryFilters>({})
+  // Bumped on every fetchProducts; responses from an older request (e.g. a
+  // tab the user already clicked away from) are dropped instead of
+  // overwriting the current tab's products.
+  const requestIdRef = useRef(0)
 
   const buildParams = useCallback((filters: ProductQueryFilters | undefined, offset: number) => {
     const params = new URLSearchParams()
@@ -53,32 +59,41 @@ export function useProducts(zone?: string, options?: UseProductsOptions) {
   }, [zone])
 
   const fetchProducts = useCallback(async (filters?: ProductQueryFilters) => {
+    const requestId = ++requestIdRef.current
+    // Clear right away so switching tabs shows the loading skeleton instead
+    // of the previous tab's products until the new ones arrive.
+    setProducts([])
+    setHasMore(false)
     setLoading(true)
     filtersRef.current = filters ?? {}
     try {
       const res = await fetch(`/api/products?${buildParams(filters, 0)}`)
       if (!res.ok) throw new Error('Failed to fetch products')
       const json = await res.json()
+      if (requestId !== requestIdRef.current) return
       const items: Product[] = json.data ?? []
       setProducts(items)
       setHasMore(!!json.hasMore)
       offsetRef.current = items.length
     } catch (err) {
+      if (requestId !== requestIdRef.current) return
       console.error('[useProducts] fetchProducts error:', err)
       setProducts([])
       setHasMore(false)
       offsetRef.current = 0
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
   }, [buildParams])
 
   const loadMore = useCallback(() => {
     if (loading || loadingMore || !hasMore) return
+    const requestId = requestIdRef.current
     setLoadingMore(true)
     fetch(`/api/products?${buildParams(filtersRef.current, offsetRef.current)}`)
       .then(res => { if (!res.ok) throw new Error('Failed to fetch products'); return res.json() })
       .then(json => {
+        if (requestId !== requestIdRef.current) return // filters changed mid-load
         const items: Product[] = json.data ?? []
         setProducts(prev => [...prev, ...items])
         setHasMore(!!json.hasMore)

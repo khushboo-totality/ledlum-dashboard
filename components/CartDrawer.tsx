@@ -1,13 +1,14 @@
 'use client'
 
+import Image from 'next/image'
 import { useState } from 'react'
+import { skipImageOptimization } from '@/lib/auth'
 import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { useZones } from '@/context/ZonesContext'
 import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
-import { downloadBoqPdf } from '@/lib/exportBoqPdf'
-import { formatExtraSpecs } from '@/lib/cartSpecs'
+import { applySelection } from '@/lib/cartSpecs'
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQty, clearCart } = useCart()
@@ -58,49 +59,24 @@ export default function CartDrawer() {
     return header + rows + footer
   }
 
-  // Best-effort pull of a spec value out of the product's free-form config
-  // selection (keys are whatever the product's config options were named) —
-  // takes priority when present (the user deliberately picked it), otherwise
-  // falls back to the product's real Supabase spec snapshot.
-  const specValue = (selection: Record<string, string>, ...keywords: string[]): string | undefined => {
-    for (const [k, v] of Object.entries(selection)) {
-      if (v && keywords.some(kw => k.toLowerCase().includes(kw))) return v
-    }
-    return undefined
-  }
-
   const handleDownloadPDF = async () => {
     if (items.length === 0 || downloadingPdf) return
 
-    const rows: BoqRow[] = items.map((item, i) => {
-      const specs = item.productSpecs
-      return {
-        slNo: i + 1,
-        description: item.productName,
-        image: item.productImage,
-        type: item.productTypeName ?? item.productCategory ?? '—',
-        code: item.productCode,
-        watt: specValue(item.selection, 'watt') ?? specs?.watts ?? '—',
-        beam: specValue(item.selection, 'beam') ?? specs?.beamAngle ?? '—',
-        cct: specValue(item.selection, 'cct', 'colour temp', 'color temp') ?? specs?.cct ?? '—',
-        auto: specValue(item.selection, 'auto', 'switch', 'driver') ?? '—',
-        color: specValue(item.selection, 'color', 'colour', 'finish') ?? specs?.bodyColors ?? '—',
-        family: specs?.family,
-        collection: specs?.collection,
-        ipRating: specs?.ipRating,
-        ledChip: specs?.ledChip,
-        cri: specs?.cri,
-        luminous: specs?.luminous,
-        specifications: formatExtraSpecs(specs?.extraSpecs),
-        qty: item.quantity,
-        unit: "NO'S",
-        // No pricing source yet in this app's data model — left at 0 until one exists.
-        mrp: 0,
-        disc: 0,
-        net: 0,
-        total: 0,
-      }
-    })
+    // Columns come from the product table (attributes) + extra_specs keys;
+    // anything picked in the Configure tab overrides the catalog value.
+    const rows: BoqRow[] = items.map((item, i) => ({
+      slNo: i + 1,
+      image: item.productImage,
+      attributes: applySelection(item.productSpecs?.attributes ?? { model: item.productCode }, item.selection),
+      specs: item.productSpecs?.extraSpecs ?? {},
+      qty: item.quantity,
+      unit: "NO'S",
+      // No pricing source yet in this app's data model — left at 0 until one exists.
+      mrp: 0,
+      disc: 0,
+      net: 0,
+      total: 0,
+    }))
 
     // TODO: replace with real per-quote project details once available —
     // SAMPLE_META is a placeholder; only date/preparedBy/dealerName are
@@ -114,6 +90,8 @@ export default function CartDrawer() {
 
     setDownloadingPdf(true)
     try {
+      // Loaded on click — jsPDF + html2canvas are ~200 KB we don't want in the page bundle.
+      const { downloadBoqPdf } = await import('@/lib/exportBoqPdf')
       await downloadBoqPdf(meta, rows, `LEDLUM-BOQ-${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (err) {
       console.error('[CartDrawer] PDF export failed:', err)
@@ -187,9 +165,9 @@ export default function CartDrawer() {
                 <div key={item.id} className="px-6 py-4">
                   <div className="flex gap-3">
                     {/* Thumb */}
-                    <div className="w-14 h-14 bg-gray rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
+                    <div className="relative w-14 h-14 bg-gray rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
                       {item.productImage ? (
-                        <img src={item.productImage} alt={item.productCode} className="w-full h-full object-contain" />
+                        <Image src={item.productImage} alt={item.productCode} fill sizes="56px" className="object-contain" unoptimized={skipImageOptimization(item.productImage)} />
                       ) : (
                         <svg className="opacity-20" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>

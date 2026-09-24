@@ -55,6 +55,9 @@ export interface Product {
   website?: string | null
   product_type?: string | null
   extra_specs?: Record<string, string> | null
+  /** DB columns (minus internal ones) as display strings, in table order —
+   * see lib/productColumns.ts. Drives the PDF columns and their titles. */
+  attributes?: Record<string, string>
 }
 
 // ── Rich product detail ──────────────────────────────────────────────
@@ -103,22 +106,12 @@ export interface CartSelection {
 // ── Cart ─────────────────────────────────────────────────────────────
 export type BrowseMode = 'zone' | 'product'
 
-// Snapshot of a product's real Supabase spec fields, captured at add-to-cart
-// time so the BOQ export can print real data instead of relying on the
-// (usually empty, for real-catalog products) ad-hoc `selection` config map.
+// Snapshot of a product's DB columns + extra_specs, captured at add-to-cart
+// time so later catalog edits don't change a quote that's already been built.
+// Keys are the raw column / extra_specs keys; the BOQ turns them into titles.
 export interface CartProductSpecs {
-  watts?: string
-  beamAngle?: string
-  cct?: string          // joined, e.g. "3000K/4000K"
-  bodyColors?: string   // joined, e.g. "White/Matt Black"
-  ipRating?: string
-  ledChip?: string
-  luminous?: string
-  cri?: string
-  family?: string
-  collection?: string   // indoor / outdoor
-  website?: string
-  extraSpecs?: Record<string, string>
+  attributes: Record<string, string>
+  extraSpecs: Record<string, string>
 }
 
 export interface CartItem {

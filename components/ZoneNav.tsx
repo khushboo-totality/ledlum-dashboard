@@ -31,7 +31,7 @@ export default function ZoneNav({ productCount }: ZoneNavProps) {
     <>
       <header className="glass-panel sticky top-0 z-40 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-white/80 px-4 py-3 shadow-header sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <LedlumLogo className="h-8 w-auto" />
+          <LedlumLogo className="h-10 w-auto" />
           <div className="hidden h-8 w-px bg-gray-mid sm:block" />
           <div className="hidden sm:block">
             <p className="text-sm font-extrabold text-foreground">Zone dashboard</p>

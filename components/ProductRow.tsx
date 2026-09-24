@@ -1,6 +1,6 @@
 'use client'
 
-import Image from 'next/image'
+import ProgressiveImage from './ProgressiveImage'
 import { useState } from 'react'
 import type { Product } from '@/types'
 import { useAuth } from '@/context/AuthContext'
@@ -31,7 +31,7 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
       {/* Thumb */}
       <div className="w-12 h-12 rounded-lg bg-gray overflow-hidden flex-shrink-0 flex items-center justify-center relative">
         {imgUrl && !imgError ? (
-          <Image src={imgUrl} alt={displayCode} fill sizes="48px" className="object-cover" onError={() => setImgError(true)} />
+          <ProgressiveImage key={imgUrl} src={imgUrl} alt={displayCode} variant="thumb" sizes="48px" className="object-cover" onError={() => setImgError(true)} />
         ) : (
           <svg className="opacity-20" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2"/>

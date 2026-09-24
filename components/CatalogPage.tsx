@@ -507,7 +507,12 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
   const displayedProducts = browseMode === 'zone' ? zoneProducts : ptProducts
   const productCount       = displayedProducts.length
-  const displayedLoading   = browseMode === 'zone' ? zoneLoading : ptLoading
+  // Product mode can't fetch until the taxonomy has picked a collection, so
+  // that wait counts as loading too (skeleton, not "No products found"). If
+  // the taxonomy came back empty there's nothing to fetch — not loading.
+  const displayedLoading   = browseMode === 'zone'
+    ? zoneLoading
+    : taxonomyLoading || (!!activeCollection && ptLoading)
   const displayedLoadingMore = browseMode === 'zone' ? loadingMore : ptLoadingMore
   const displayedHasMore   = browseMode === 'zone' ? hasMore : ptHasMore
   const displayedLoadMore  = browseMode === 'zone' ? loadMore : ptLoadMore
@@ -526,8 +531,6 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null)
   const loadMoreRef = useRef(displayedLoadMore)
   useEffect(() => { loadMoreRef.current = displayedLoadMore }, [displayedLoadMore])
-
-  console.log("productCount",displayedProducts)
 
   useEffect(() => {
     const el = loadMoreSentinelRef.current

@@ -4,6 +4,7 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getZoneRowIdBySlug, getZoneSlugsByRowIds } from '@/lib/services/zones'
 import type { Product, ProductFormData, Stats } from '@/types'
+import { toDisplayAttributes } from '@/lib/productColumns'
 
 const TABLE = 'ledlum_products'
 const JOIN_TABLE = 'ledlum_product_zone'
@@ -121,6 +122,7 @@ function mapRowToProduct(row: ProductRow, zoneSlugs: string[]): Product {
     website: row.website,
     product_type: row.product_type,
     extra_specs: row.extra_specs && Object.keys(row.extra_specs).length ? row.extra_specs : null,
+    attributes: toDisplayAttributes(row as unknown as Record<string, unknown>),
   }
 }
 
@@ -131,7 +133,7 @@ async function getZoneSlugsForProductIds(productIds: number[]): Promise<Map<numb
   const allRows: { product_id: number; zone_id: number }[] = []
   for (const idBatch of chunk(productIds, ID_CHUNK_SIZE)) {
     const rows = await selectAllPages<{ product_id: number; zone_id: number }>((from, to) =>
-      supabaseAdmin.from(JOIN_TABLE).select('product_id, zone_id').in('product_id', idBatch).range(from, to)
+      supabaseAdmin.from(JOIN_TABLE).select('product_id, zone_id').in('product_id', idBatch).order('id').range(from, to)
     )
     allRows.push(...rows)
   }
@@ -151,7 +153,7 @@ async function getProductIdsForZone(zoneSlug: string): Promise<number[] | null> 
   const zoneRowId = await getZoneRowIdBySlug(zoneSlug)
   if (!zoneRowId) return null
   const rows = await selectAllPages<{ product_id: number }>((from, to) =>
-    supabaseAdmin.from(JOIN_TABLE).select('product_id').eq('zone_id', zoneRowId).range(from, to)
+    supabaseAdmin.from(JOIN_TABLE).select('product_id').eq('zone_id', zoneRowId).order('id').range(from, to)
   )
   return rows.map(r => r.product_id)
 }
@@ -447,7 +449,7 @@ export async function getCategories(zone?: string): Promise<string[]> {
     const idChunks = productIdFilter ? chunk(productIdFilter, ID_CHUNK_SIZE) : [null]
     for (const idBatch of idChunks) {
       const rows = await selectAllPages<{ group_name: string | null }>((from, to) => {
-        let q = supabaseAdmin.from(TABLE).select('group_name')
+        let q = supabaseAdmin.from(TABLE).select('group_name').order('id')
         if (idBatch) q = q.in('id', idBatch)
         return q.range(from, to)
       })
@@ -478,7 +480,7 @@ export async function getProductTaxonomy(): Promise<CollectionNode[]> {
   if (taxonomyCache.data && taxonomyCache.expires > Date.now()) return taxonomyCache.data
 
   const rows = await selectAllPages<{ collection: string | null; group_name: string | null; category: string | null }>(
-    (from, to) => supabaseAdmin.from(TABLE).select('collection, group_name, category').range(from, to)
+    (from, to) => supabaseAdmin.from(TABLE).select('collection, group_name, category').order('id').range(from, to)
   )
 
   const collections = new Map<string, Map<string, Map<string, number>>>()

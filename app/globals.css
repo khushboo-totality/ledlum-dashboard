@@ -50,9 +50,16 @@ body {
       radial-gradient(circle at 95% 10%, rgba(23, 23, 23, 0.06), transparent 24rem),
       #f7f7f3;
   }
+  /* No backdrop-filter: this is used on sticky bars, and a blur there is
+     re-rendered over the scrolling image grid on every frame (scroll jank). */
   .glass-panel {
-    background: rgba(255, 255, 255, 0.86);
-    backdrop-filter: blur(16px);
+    background: rgba(255, 255, 255, 0.96);
+  }
+  /* Product cards: skip layout/paint for cards far off-screen — infinite
+     scroll keeps appending, so the grid grows to hundreds of cards. */
+  .card-cv {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 300px;
   }
   .tap-target {
     min-height: 44px;

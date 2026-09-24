@@ -42,7 +42,7 @@ export default function ZoneChooser() {
   return (
     <div className="min-h-screen bg-gray flex flex-col">
       <header className="bg-white border-b border-gray h-16 flex items-center justify-between px-8 sticky top-0 z-40">
-        <LedlumLogo className="h-8 w-auto" />
+        <LedlumLogo className="h-10 w-auto" />
 
         <div className="flex items-center gap-3">
           {user ? (

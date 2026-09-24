@@ -1,6 +1,6 @@
 'use client'
 
-import Image from 'next/image'
+import ProgressiveImage from './ProgressiveImage'
 import { useState, useEffect, useMemo } from 'react'
 import type { Product, ProductPermutation, CartSelection } from '@/types'
 import { useAuth } from '@/context/AuthContext'
@@ -9,9 +9,9 @@ import { useToast } from '@/context/ToastContext'
 import { getImageUrl } from '@/lib/auth'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
-import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
-import { toCartProductSpecs, formatExtraSpecs } from '@/lib/cartSpecs'
-import { downloadBoqPdf } from '@/lib/exportBoqPdf'
+import { SAMPLE_META } from '@/boq/BOQDocument'
+import { toCartProductSpecs } from '@/lib/cartSpecs'
+import { formatColumnTitle, toDisplaySpecs } from '@/lib/productColumns'
 
 interface Props {
   product: Product | null
@@ -133,57 +133,6 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
     }
   }
 
-  const handlePrint = async (name: string, prod: typeof product) => {
-    if (!prod || downloadingPdf) return
-    const z = getZoneById(prod.zone ?? '')?.label ?? prod.zone ?? ''
-
-    // Single-row BOQ — BOQDocument hides any column with no data across all
-    // rows, so only the specs this product actually has get shown.
-    const row: BoqRow = {
-      slNo: 1,
-      description: name || prod.Codes,
-      image: prod.imageUrl || prod.ImageLink || undefined,
-      type: prod.Category ?? '—',
-      code: prod.Codes,
-      watt: prod.Wattage ?? prod.watts ?? '—',
-      beam: prod.BeamAngle ?? prod.beam_angle ?? '—',
-      cct: prod.ColourTemp ?? (prod.cct?.length ? prod.cct.join('/') : '—'),
-      auto: '—',
-      color: prod.Finish ?? (prod.body_colors?.length ? prod.body_colors.join('/') : '—'),
-      family: prod.family ?? undefined,
-      collection: prod.collection,
-      ipRating: prod.ip_rating ?? undefined,
-      ledChip: prod.led_chip ?? undefined,
-      cri: prod.cri ?? undefined,
-      luminous: prod.luminous ?? undefined,
-      specifications: formatExtraSpecs(prod.extra_specs),
-      qty: 1,
-      unit: "NO'S",
-      mrp: 0,
-      disc: 0,
-      net: 0,
-      total: 0,
-    }
-
-    const meta: BoqMeta = {
-      ...SAMPLE_META,
-      date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-      preparedBy: user?.name ?? SAMPLE_META.preparedBy,
-      dealerName: user?.company ?? user?.name ?? SAMPLE_META.dealerName,
-      projectName: `Product Data Sheet — ${z || SAMPLE_META.projectName}`,
-    }
-
-    setDownloadingPdf(true)
-    try {
-      await downloadBoqPdf(meta, [row], `${prod.Codes}-datasheet.pdf`)
-    } catch (err) {
-      console.error('[ProductDetail] PDF export failed:', err)
-      toast('Failed to generate PDF', 'error')
-    } finally {
-      setDownloadingPdf(false)
-    }
-  }
-
   const handleAddToCart = () => {
     if (!product) return
     const heroImg = detail?.productAbout?.image || getImageUrl(product.ImageLink ?? "") || ''
@@ -250,6 +199,42 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
     .filter(([, v]) => v && v !== 'N/A')
     .forEach(([k, v]) => addSpec(k, v))
 
+  // Single-product data sheet. Spec rows come straight from the product
+  // table (column name → title) + one row per extra_specs key, same as the
+  // BOQ; legacy/demo products without DB attributes fall back to the
+  // Overview tab's list.
+  const handlePrint = async () => {
+    if (!product || downloadingPdf) return
+    const pdfSpecs = product.attributes
+      ? [
+          ...Object.entries(product.attributes),
+          ...Object.entries(toDisplaySpecs(product.extra_specs)),
+        ].map(([k, v]) => ({ k: formatColumnTitle(k), v }))
+      : specRows.filter(r => !['Source', 'Added', 'Website', 'Zone'].includes(r.k))
+    setDownloadingPdf(true)
+    try {
+      // Loaded on click — jsPDF + html2canvas are ~200 KB we don't want in the page bundle.
+      const { downloadProductDatasheetPdf } = await import('@/lib/exportBoqPdf')
+      await downloadProductDatasheetPdf({
+        title,
+        code: product.Codes,
+        category: product.attributes?.category ?? category,
+        description: description || undefined,
+        heroImage: galleries[0],
+        gallery: galleries,
+        specs: pdfSpecs,
+        date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        preparedFor: user?.company ?? user?.name,
+        companyAddress: SAMPLE_META.companyAddress,
+      }, `${product.Codes}-datasheet.pdf`)
+    } catch (err) {
+      console.error('[ProductDetail] PDF export failed:', err)
+      toast('Failed to generate PDF', 'error')
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
   const tabs: Array<'overview' | 'config' | 'gallery'> = ['overview', ...(hasConfig ? ['config' as const] : []), 'gallery']
 
   return (
@@ -269,7 +254,7 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
 
           {/* Left: hero + gallery — capped height & full width on mobile,
               44%-width column filling the panel height from md up */}
-          <div className="h-56 sm:h-72 md:h-auto w-full md:w-[44%] flex-shrink-0 bg-gray flex flex-col">
+          <div className="h-56 sm:h-72 md:h-auto w-full md:w-[44%] flex-shrink-0 bg-white flex flex-col">
             {/* Hero image */}
             <div className="flex-1 relative overflow-hidden">
               {galleries[galleryIdx] ? (
@@ -279,10 +264,12 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                   className="absolute inset-0 h-full w-full cursor-zoom-in"
                   title="View full size"
                 >
-                  <Image
+                  <ProgressiveImage
+                    key={galleries[galleryIdx]}
                     src={galleries[galleryIdx]}
                     alt={product?.Codes ?? ''}
-                    fill sizes="(max-width: 768px) 100vw, 44vw"
+                    variant="hero"
+                    sizes="(max-width: 768px) 100vw, 44vw"
                     className="object-contain animate-zoom-slow"
                     priority
                   />
@@ -309,9 +296,9 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                   <button
                     key={i}
                     onClick={() => setGalleryIdx(i)}
-                    className={`flex-shrink-0 snap-start w-11 h-11 sm:w-14 sm:h-14 rounded-lg overflow-hidden border-2 transition-all ${galleryIdx === i ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                    className={`relative flex-shrink-0 snap-start w-11 h-11 sm:w-14 sm:h-14 rounded-lg overflow-hidden border-2 transition-all ${galleryIdx === i ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'}`}
                   >
-                    <img src={g} alt="" className="w-full h-full object-contain" />
+                    <ProgressiveImage src={g} alt="" variant="thumb" sizes="56px" className="object-contain" />
                   </button>
                 ))}
               </div>
@@ -350,7 +337,7 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                 {/* Download / PDF button — viewer + vendor */}
                 {can('download') && (
                   <button
-                    onClick={() => handlePrint(title, product)}
+                    onClick={handlePrint}
                     disabled={downloadingPdf}
                     title="Download as PDF"
                     className="w-9 h-9 border border-gray rounded-full flex items-center justify-center text-gray-dark hover:bg-primary/8 hover:text-primary hover:border-primary/40 disabled:opacity-60 transition-all"
@@ -505,8 +492,8 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                     <div className="grid grid-cols-2 gap-3">
                       {galleries.map((g, i) => (
                         <button key={i} onClick={() => { setGalleryIdx(i); setActiveTab('overview') }}
-                          className="aspect-[4/5] rounded-xl overflow-hidden border border-gray hover:border-primary transition-colors">
-                          <img src={g} alt="" className="w-full h-full object-cover" />
+                          className="relative aspect-[4/5] rounded-xl overflow-hidden border border-gray hover:border-primary transition-colors">
+                          <ProgressiveImage src={g} alt="" variant="card" sizes="(max-width: 768px) 50vw, 280px" className="object-cover" />
                         </button>
                       ))}
                     </div>

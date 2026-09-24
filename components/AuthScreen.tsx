@@ -66,7 +66,7 @@ export default function AuthScreen() {
         <div className="flex-1 bg-[#f2f0ec] flex items-center justify-center p-12 overflow-y-auto">
           <div className="w-full max-w-[360px]">
 
-            <LedlumLogo className="w-28 mb-8" />
+            <LedlumLogo className="w-40 mb-8" />
 
             <h1 className="text-3xl font-extrabold text-foreground mb-1 leading-tight">
               Create account
