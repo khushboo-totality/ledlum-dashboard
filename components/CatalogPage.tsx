@@ -623,7 +623,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     toast(`${product.Codes} added to quote`, 'success')
   }, [can, addItem, browseMode, activeCollectionNode, activeCollection, activeGroup, activeProductType, activeZone, toast])
 
-  const isVendorOrGuest = user?.role === 'vendor' || user?.role === 'guest'  // kept for cart banner only
+  const isPartnerOrGuest = user?.role === 'partner' || user?.role === 'guest'  // kept for cart banner only
 
   return (
     <div className="min-h-screen app-shell">
@@ -653,7 +653,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
 
     {can('cart') && (
       <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 shadow-sm">
-        Vendor quote mode
+        Partner quote mode
       </span>
     )}
   </div>
@@ -697,7 +697,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
           } : undefined}
         />
 
-      {/* ── Welcome banner for vendors ── */}
+      {/* ── Welcome banner for partners ── */}
       {can('cart') && (
         <div className="mx-4 mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm sm:mx-6 lg:mx-8">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-600 flex-shrink-0">

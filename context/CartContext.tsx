@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import type { CartItem } from '@/types'
+import { trackActivity } from '@/lib/supabaseClient'
 
 interface CartContextType {
   items: CartItem[]
@@ -43,11 +44,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return [...prev, { ...item, id: uuidv4(), addedAt: new Date().toISOString() }]
     })
     triggerPulse()
+    trackActivity('quote_item_added', {
+      productCode: item.productCode, quantity: item.quantity, selection: item.selection,
+    })
   }, [triggerPulse])
 
   const removeItem = useCallback((id: string) => {
+    const removed = items.find(i => i.id === id)
+    if (removed) trackActivity('quote_item_removed', { productCode: removed.productCode, quantity: removed.quantity })
     setItems(prev => prev.filter(i => i.id !== id))
-  }, [])
+  }, [items])
 
   const updateQty = useCallback((id: string, qty: number) => {
     if (qty <= 0) { setItems(prev => prev.filter(i => i.id !== id)); return }

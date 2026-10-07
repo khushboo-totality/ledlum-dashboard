@@ -6,7 +6,7 @@ The application now supports both static export (for `out` folder) and full API 
 
 ### ✅ **What's Working:**
 - **Browse by Zone** functionality fully restored
-- **API endpoints** for products, categories, stats, and vendors
+- **API endpoints** for products, categories, stats, partners, and Supabase-backed login
 - **Static export** with `out` folder generation
 - **All TypeScript errors** resolved
 - **Product catalog** with zone filtering

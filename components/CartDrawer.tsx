@@ -9,6 +9,7 @@ import { useToast } from '@/context/ToastContext'
 import { useZones } from '@/context/ZonesContext'
 import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
 import { applySelection } from '@/lib/cartSpecs'
+import { trackActivity } from '@/lib/supabaseClient'
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQty, clearCart } = useCart()
@@ -30,10 +31,13 @@ export default function CartDrawer() {
     return getZoneById(item.zone)?.label ?? item.zone ?? '—'
   }
 
+  // Compact item list for the activity log.
+  const quoteSummary = () => items.map(i => ({ productCode: i.productCode, quantity: i.quantity, selection: i.selection }))
+
   const buildEmailBody = () => {
     const header =
       `LEDLUM — Quote Request\n${'='.repeat(50)}\n\n` +
-      `Vendor : ${user?.name ?? 'Unknown'}\n` +
+      `Partner : ${user?.name ?? 'Unknown'}\n` +
       `Company: ${user?.company ?? '—'}\n` +
       `Email  : ${user?.email ?? '—'}\n` +
       `Date   : ${new Date().toLocaleString('en-IN')}\n\n` +
@@ -80,7 +84,7 @@ export default function CartDrawer() {
 
     // TODO: replace with real per-quote project details once available —
     // SAMPLE_META is a placeholder; only date/preparedBy/dealerName are
-    // filled in from the logged-in vendor.
+    // filled in from the logged-in partner.
     const meta: BoqMeta = {
       ...SAMPLE_META,
       date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
@@ -93,6 +97,7 @@ export default function CartDrawer() {
       // Loaded on click — jsPDF + html2canvas are ~200 KB we don't want in the page bundle.
       const { downloadBoqPdf } = await import('@/lib/exportBoqPdf')
       await downloadBoqPdf(meta, rows, `LEDLUM-BOQ-${new Date().toISOString().slice(0, 10)}.pdf`)
+      trackActivity('boq_downloaded', { items: quoteSummary(), totalQty })
     } catch (err) {
       console.error('[CartDrawer] PDF export failed:', err)
       toast('Failed to generate PDF', 'error')
@@ -105,7 +110,8 @@ export default function CartDrawer() {
     if (items.length === 0) return
     setSending(true)
     const body    = buildEmailBody()
-    const subject = `Quote Request — ${user?.company ?? user?.name ?? 'Vendor'} — ${new Date().toLocaleDateString('en-IN')}`
+    const subject = `Quote Request — ${user?.company ?? user?.name ?? 'Partner'} — ${new Date().toLocaleDateString('en-IN')}`
+    trackActivity('quote_sent', { items: quoteSummary(), totalQty })
     window.location.href = `mailto:sales@ledlum.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
     await new Promise(r => setTimeout(r, 800))
     setSent(true); setSending(false)
@@ -115,6 +121,7 @@ export default function CartDrawer() {
 
   const handleCopyQuote = () => {
     navigator.clipboard.writeText(buildEmailBody())
+    trackActivity('quote_copied', { items: quoteSummary(), totalQty })
     toast('Quote copied to clipboard', 'success')
   }
 

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
 import LedlumLogo from './LedlumLogo'
-import VendorManager from './VendorManager'
+import PartnerManager from './PartnerManager'
 import { AdminMenuButton, useAdminShell } from './AdminShell'
 
 const ROLE_STYLES: Record<string, string> = {
@@ -12,7 +12,7 @@ const ROLE_STYLES: Record<string, string> = {
   editor: 'bg-blue-50 text-blue-700 border border-blue-200',
   viewer: 'bg-gray/80 text-gray-text border border-gray-mid',
   guest:  'bg-gray/80 text-gray-text border border-gray-mid',
-  vendor: 'bg-amber-50 text-amber-700 border border-amber-200',
+  partner: 'bg-amber-50 text-amber-700 border border-amber-200',
 }
 
 const AVATAR_STYLES: Record<string, string> = {
@@ -20,13 +20,13 @@ const AVATAR_STYLES: Record<string, string> = {
   editor: 'bg-blue-600 text-white',
   viewer: 'bg-gray-dark text-white',
   guest:  'bg-gray-dark text-white',
-  vendor: 'bg-amber-500 text-white',
+  partner: 'bg-amber-500 text-white',
 }
 
 export default function Header({ productCount }: { productCount: number }) {
   const { user, logout, can }          = useAuth()
   const { total, openCart, isPulsing } = useCart()
-  // const [vendorOpen, setVendorOpen]    = useState(false)
+  // const [partnerOpen, setPartnerOpen]    = useState(false)
   // Inside the admin sidebar shell, the sidebar already shows the logo and
   // user/sign-out on desktop — hide the duplicates there.
   const inShell = !!useAdminShell()
@@ -50,7 +50,7 @@ export default function Header({ productCount }: { productCount: number }) {
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
           {/* {user.role === 'admin' && (
             <button
-              onClick={() => setVendorOpen(true)}
+              onClick={() => setPartnerOpen(true)}
               className="tap-target flex items-center gap-1.5 rounded-xl border border-gray-mid bg-white/80 px-3.5 py-2 text-sm font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -59,7 +59,7 @@ export default function Header({ productCount }: { productCount: number }) {
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
-              <span className="hidden sm:inline">Vendors</span>
+              <span className="hidden sm:inline">Partners</span>
             </button>
           )} */}
 
@@ -124,7 +124,7 @@ export default function Header({ productCount }: { productCount: number }) {
         </div>
       </header>
 
-      {/* <VendorManager isOpen={vendorOpen} onClose={() => setVendorOpen(false)} /> */}
+      {/* <PartnerManager isOpen={partnerOpen} onClose={() => setPartnerOpen(false)} /> */}
     </>
   )
 }

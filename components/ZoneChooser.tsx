@@ -13,7 +13,7 @@ export const ROLE_STYLES: Record<string, string> = {
   editor: 'bg-blue-50 text-blue-700 border border-blue-200',
   viewer: 'bg-gray/80 text-gray-text border border-gray-mid',
   guest:  'bg-gray/80 text-gray-text border border-gray-mid',
-  vendor: 'bg-amber-50 text-amber-700 border border-amber-200',
+  partner: 'bg-amber-50 text-amber-700 border border-amber-200',
 }
 
 export const AVATAR_STYLES: Record<string, string> = {
@@ -21,7 +21,7 @@ export const AVATAR_STYLES: Record<string, string> = {
   editor: 'bg-blue-600 text-white',
   viewer: 'bg-gray-dark text-white',
   guest:  'bg-gray-dark text-white',
-  vendor: 'bg-amber-500 text-white',
+  partner: 'bg-amber-500 text-white',
 }
 
 export default function ZoneChooser() {

@@ -110,24 +110,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(db.getStats(zone))
 }`
 
-const vendorsRoute = `import { NextRequest, NextResponse } from 'next/server'
-import { vendorStore } from '@/lib/vendorStore'
-
-export async function GET() {
-  return NextResponse.json(vendorStore.getAll().map(v => ({ ...v, password: '••••••••' })))
-}
-
-export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const { username, password, name, company, email } = body
-  if (!username || !password || !name || !company || !email) {
-    return NextResponse.json({ error: 'All fields are required' }, { status: 400 })
-  }
-  const result = vendorStore.create({ username, password, name, company, email })
-  if ('error' in result) return NextResponse.json(result, { status: 409 })
-  return NextResponse.json({ ...result, password: '••••••••' }, { status: 201 })
-}`
-
 // Write API route files
 fs.writeFileSync(path.join(productsDir, 'route.ts'), productsRoute)
 fs.writeFileSync(path.join(productIdDir, 'route.ts'), productIdRoute)
@@ -144,8 +126,7 @@ fs.writeFileSync(path.join(apiDir, 'categories', 'route.ts'), categoriesRoute)
 fs.mkdirSync(path.join(apiDir, 'stats'), { recursive: true })
 fs.writeFileSync(path.join(apiDir, 'stats', 'route.ts'), statsRoute)
 
-fs.mkdirSync(path.join(apiDir, 'vendors'), { recursive: true })
-fs.writeFileSync(path.join(apiDir, 'vendors', 'route.ts'), vendorsRoute)
+// Partner accounts + login live in app/api/partners and app/api/auth (Supabase) — not regenerated here.
 
 // Modify next.config.js to remove output: 'export'
 const configPath = path.join(process.cwd(), 'next.config.js')

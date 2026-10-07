@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import LedlumLogo from './LedlumLogo'
 import Image from 'next/image'
 
-type AuthTab = 'admin' | 'vendor' | 'guest'
+type AuthTab = 'admin' | 'partner' | 'guest'
 
 const CAROUSEL_IMAGES = [
   { src: '/home-bg.png',    alt: 'LEDLUM lighting ambiance'    },
@@ -42,14 +42,43 @@ export default function AuthScreen() {
     setTimeout(() => { setCurrent(idx); setFading(false) }, 400)
   }
 
-  const handleLogin = () => {
-    const ok = login(username.trim(), password)
-    if (!ok) {
-      setError('Invalid username or password.')
-      setTimeout(() => setError(''), 3000)
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleLogin = async () => {
+    if (submitting) return
+    if (!username.trim() || !password) { setError('Enter your username and password.'); return }
+    setSubmitting(true); setError('')
+    const err = await login(username.trim(), password)
+    setSubmitting(false)
+    if (err) {
+      setError(err)
+      setTimeout(() => setError(''), 4000)
     }
   }
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Enter') handleLogin() }
+
+  // ── Forgot password ──
+  const [forgot, setForgot]           = useState(false)
+  const [forgotSent, setForgotSent]   = useState(false)
+  const [forgotBusy, setForgotBusy]   = useState(false)
+
+  const handleForgot = async () => {
+    if (!username.trim()) { setError('Enter your username or email.'); return }
+    setForgotBusy(true); setError('')
+    try {
+      await fetch('/api/auth/forgot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: username.trim() }),
+      })
+      setForgotSent(true)
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setForgotBusy(false)
+    }
+  }
+  const closeForgot = () => { setForgot(false); setForgotSent(false); setError('') }
 
   const inputCls = `
     w-full bg-white rounded-2xl px-5 py-4 text-sm font-bai text-foreground
@@ -78,13 +107,13 @@ export default function AuthScreen() {
             {/* Tabs */}
             <div className="flex bg-[#e8e4de] rounded-xl p-1 mb-6 gap-1">
               {([
-                { key: 'vendor', label: 'Vendor'     },
+                { key: 'partner', label: 'Partner'     },
                 { key: 'guest',  label: 'Guest View' },
                 { key: 'admin',  label: 'Admin'      },
               ] as { key: AuthTab; label: string }[]).map(t => (
                 <button
                   key={t.key}
-                  onClick={() => { setTab(t.key); setUsername(''); setPassword(''); setError('') }}
+                  onClick={() => { setTab(t.key); setUsername(''); setPassword(''); closeForgot() }}
                   className={`flex-1 py-2 text-xs rounded-lg font-bold transition-all font-bai ${
                     tab === t.key
                       ? 'bg-primary text-white shadow-sm'
@@ -114,13 +143,59 @@ export default function AuthScreen() {
               </div>
             )}
 
-            {/* Vendor / Admin */}
-            {tab !== 'guest' && (
+            {/* Forgot password */}
+            {tab !== 'guest' && forgot && (
+              <div className="space-y-3">
+                {forgotSent ? (
+                  <div className="bg-white rounded-2xl p-4 shadow-sm">
+                    <p className="text-sm text-foreground font-pop leading-relaxed">
+                      If an account exists for <strong>{username.trim()}</strong>, we&apos;ve emailed a link to reset the password.
+                      It expires in 1 hour.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-400 font-pop">
+                      Enter your username or email and we&apos;ll send you a link to choose a new password.
+                    </p>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleForgot() }}
+                      placeholder="Username or email"
+                      autoComplete="username"
+                      autoFocus
+                      className={inputCls}
+                    />
+                    {error && (
+                      <p className="text-red-500 text-xs font-pop bg-red-50 rounded-xl px-4 py-2.5">{error}</p>
+                    )}
+                    <button
+                      onClick={handleForgot}
+                      disabled={forgotBusy}
+                      className="w-full bg-primary hover:bg-primary/90 disabled:opacity-60 text-white font-extrabold py-4 rounded-2xl font-bai text-sm tracking-wide transition-colors"
+                    >
+                      {forgotBusy ? 'Sending…' : 'Send reset link'}
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={closeForgot}
+                  className="w-full text-center text-xs font-semibold text-gray-400 hover:text-primary font-pop pt-1"
+                >
+                  ← Back to sign in
+                </button>
+              </div>
+            )}
+
+            {/* Partner / Admin */}
+            {tab !== 'guest' && !forgot && (
               <div className="space-y-3">
 
-                {tab === 'vendor' && (
+                {tab === 'partner' && (
                   <div className="bg-amber-50 border-l-4 border-amber-400 rounded-xl px-4 py-3 mb-1">
-                    <p className="text-xs font-extrabold text-amber-700 uppercase tracking-wide">Vendor Access</p>
+                    <p className="text-xs font-extrabold text-amber-700 uppercase tracking-wide">Partner Access</p>
                     <p className="text-xs text-amber-600 mt-0.5">Browse products &amp; send quote requests.</p>
                   </div>
                 )}
@@ -130,7 +205,7 @@ export default function AuthScreen() {
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                   onKeyDown={onKey}
-                  placeholder={tab === 'vendor' ? 'Username (e.g. vendor1)' : 'Username (e.g. admin)'}
+                  placeholder="Username or email"
                   autoComplete="username"
                   className={inputCls}
                 />
@@ -170,9 +245,17 @@ export default function AuthScreen() {
 
                 <button
                   onClick={handleLogin}
-                  className="w-full bg-primary hover:bg-primary/90 text-white font-extrabold py-4 rounded-2xl font-bai text-sm tracking-wide transition-colors"
+                  disabled={submitting}
+                  className="w-full bg-primary hover:bg-primary/90 disabled:opacity-60 text-white font-extrabold py-4 rounded-2xl font-bai text-sm tracking-wide transition-colors"
                 >
-                  Sign in
+                  {submitting ? 'Signing in…' : 'Sign in'}
+                </button>
+
+                <button
+                  onClick={() => { setForgot(true); setPassword(''); setError('') }}
+                  className="w-full text-center text-xs font-semibold text-gray-400 hover:text-primary font-pop pt-1"
+                >
+                  Forgot password?
                 </button>
 
                 {/* <p className="text-center text-xs text-gray-400 font-pop pt-1">

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useZones } from '@/context/ZonesContext'
 import type { CollectionNode } from '@/lib/services/products'
-import VendorManager from './VendorManager'
+import PartnerManager from './PartnerManager'
 import { useAdminShell } from './AdminShell'
 
 type View = 'grid' | 'list'
@@ -55,12 +55,12 @@ export default function Toolbar({
 }: ToolbarProps) {
   const { can, user } = useAuth()
   const { zones } = useZones()
-  // Vendors has its own section in the admin sidebar — only show the toolbar
+  // Partners has its own section in the admin sidebar — only show the toolbar
   // shortcut where there's no sidebar (e.g. /zone pages).
   const adminShell = useAdminShell()
-  const showVendorButton = user?.role === 'admin' && !adminShell
+  const showPartnerButton = user?.role === 'admin' && !adminShell
 
-  const [vendorOpen, setVendorOpen] = useState(false)
+  const [partnerOpen, setPartnerOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   const activeFilterCount = productTaxonomy
@@ -142,9 +142,9 @@ export default function Toolbar({
           </button>
         )}
 
-        {showVendorButton && (
+        {showPartnerButton && (
           <button
-            onClick={() => setVendorOpen(true)}
+            onClick={() => setPartnerOpen(true)}
             className="tap-target flex h-11 flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-mid bg-white/80 px-3.5 text-sm font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -153,12 +153,12 @@ export default function Toolbar({
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
               <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            <span className="hidden sm:inline">Vendors</span>
+            <span className="hidden sm:inline">Partners</span>
           </button>
         )}
 
-        {showVendorButton && (
-          <VendorManager isOpen={vendorOpen} onClose={() => setVendorOpen(false)} />
+        {showPartnerButton && (
+          <PartnerManager isOpen={partnerOpen} onClose={() => setPartnerOpen(false)} />
         )}
       </div>
     </div>
@@ -169,7 +169,7 @@ export default function Toolbar({
         new containing block for `position: fixed` descendants. Left inline,
         the drawer would render "fixed" relative to that ~70px sticky bar
         instead of the viewport, squashing it into a tiny box. Portaling
-        (same fix VendorManager uses below) escapes that entirely. ── */}
+        (same fix PartnerManager uses below) escapes that entirely. ── */}
     {filtersOpen && createPortal(
       <>
         <div

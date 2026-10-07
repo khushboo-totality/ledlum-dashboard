@@ -12,6 +12,7 @@ import { getProductDetail } from '@/lib/productDetails'
 import { SAMPLE_META } from '@/boq/BOQDocument'
 import { toCartProductSpecs } from '@/lib/cartSpecs'
 import { formatColumnTitle, toDisplaySpecs } from '@/lib/productColumns'
+import { trackActivity } from '@/lib/supabaseClient'
 
 interface Props {
   product: Product | null
@@ -85,6 +86,14 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
     }
     return () => { document.body.style.overflow = '' }
   }, [product])
+
+  // Partner activity history — record which products they open.
+  useEffect(() => {
+    if (product && user?.role === 'partner') {
+      trackActivity('product_viewed', { productCode: product.Codes, category: productCategory ?? product.Category })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id])
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -334,7 +343,7 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                     </svg>
                   </button>
                 )}
-                {/* Download / PDF button — viewer + vendor */}
+                {/* Download / PDF button — viewer + partner */}
                 {can('download') && (
                   <button
                     onClick={handlePrint}
@@ -509,7 +518,7 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                 to show (e.g. a guest/viewer with no cart/edit/delete rights). */}
             {(can('cart') || (can('edit') && !product?.readOnly) || (can('delete') && !product?.readOnly)) && (
               <div className="px-4 sm:px-7 py-3 sm:py-4 border-t border-gray flex-shrink-0">
-                {/* Vendor: quantity + add to cart */}
+                {/* Partner: quantity + add to cart */}
                 {can('cart') ? (
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">

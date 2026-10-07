@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'editor' | 'viewer' | 'guest' | 'vendor'
+export type Role = 'admin' | 'editor' | 'viewer' | 'guest' | 'partner'
 
 export interface User {
   username: string
