@@ -16,11 +16,14 @@ interface VendorRecord {
 interface VendorManagerProps {
   isOpen: boolean
   onClose: () => void
+  /** Render as an in-page section (admin sidebar "Vendors") instead of a
+   * portaled modal — no backdrop, no close button, no Escape handler. */
+  inline?: boolean
 }
 
 const AVATAR_COLORS = ['#9a8c66', '#7a6e4e', '#b5a882', '#8a7d56', '#c4b896']
 
-export default function VendorManager({ isOpen, onClose }: VendorManagerProps) {
+export default function VendorManager({ isOpen, onClose, inline = false }: VendorManagerProps) {
   const [vendors, setVendors]   = useState<VendorRecord[]>([])
   const [loading, setLoading]   = useState(false)
   const [view, setView]         = useState<'list' | 'create'>('list')
@@ -50,10 +53,11 @@ export default function VendorManager({ isOpen, onClose }: VendorManagerProps) {
   }, [isOpen, fetchVendors])
 
   useEffect(() => {
+    if (inline) return
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [onClose])
+  }, [onClose, inline])
 
   const resetForm = () => {
     setUsername(''); setPassword(''); setName(''); setCompany(''); setEmail(''); setError('')
@@ -95,18 +99,11 @@ export default function VendorManager({ isOpen, onClose }: VendorManagerProps) {
   // ── KEY FIX: render nothing at all when closed ──
   if (!isOpen) return null
 
-  return createPortal(
-    <>
-      {/* Backdrop — clicks close the modal */}
-      <div
-        className="fixed inset-0 z-[70] bg-black/40"
-        onClick={onClose}
-      />
-
-      {/* Modal — centred, above backdrop, stops click propagation */}
-      <div className="fixed inset-0 z-[70] flex items-center justify-center p-5 pointer-events-none">
+  const card = (
         <div
-          className="bg-white rounded-2xl w-full max-w-2xl shadow-modal pointer-events-auto flex flex-col max-h-[85vh] overflow-hidden animate-fade-in"
+          className={inline
+            ? 'bg-white rounded-2xl w-full shadow-card border border-white/80 flex flex-col overflow-hidden'
+            : 'bg-white rounded-2xl w-full max-w-2xl shadow-modal pointer-events-auto flex flex-col max-h-[85vh] overflow-hidden animate-fade-in'}
           onClick={e => e.stopPropagation()}
         >
           {/* Gold top bar */}
@@ -140,12 +137,14 @@ export default function VendorManager({ isOpen, onClose }: VendorManagerProps) {
                   New Vendor
                 </button>
               )}
-              <button
-                onClick={onClose}
-                className="w-8 h-8 rounded-full border border-gray flex items-center justify-center text-gray-dark hover:bg-primary hover:text-white hover:border-primary transition-all text-sm"
-              >
-                ✕
-              </button>
+              {!inline && (
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full border border-gray flex items-center justify-center text-gray-dark hover:bg-primary hover:text-white hover:border-primary transition-all text-sm"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
@@ -359,6 +358,21 @@ export default function VendorManager({ isOpen, onClose }: VendorManagerProps) {
             </div>
           )}
         </div>
+  )
+
+  if (inline) return card
+
+  return createPortal(
+    <>
+      {/* Backdrop — clicks close the modal */}
+      <div
+        className="fixed inset-0 z-[70] bg-black/40"
+        onClick={onClose}
+      />
+
+      {/* Modal — centred, above backdrop */}
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-5 pointer-events-none">
+        {card}
       </div>
     </>,
     document.body

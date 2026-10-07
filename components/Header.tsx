@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
 import LedlumLogo from './LedlumLogo'
 import VendorManager from './VendorManager'
+import { AdminMenuButton, useAdminShell } from './AdminShell'
 
 const ROLE_STYLES: Record<string, string> = {
   admin:  'bg-primary/10 text-primary border border-primary/20',
@@ -26,6 +27,10 @@ export default function Header({ productCount }: { productCount: number }) {
   const { user, logout, can }          = useAuth()
   const { total, openCart, isPulsing } = useCart()
   // const [vendorOpen, setVendorOpen]    = useState(false)
+  // Inside the admin sidebar shell, the sidebar already shows the logo and
+  // user/sign-out on desktop — hide the duplicates there.
+  const inShell = !!useAdminShell()
+  const lgHide = inShell ? 'lg:hidden' : ''
 
   if (!user) return null
 
@@ -33,8 +38,9 @@ export default function Header({ productCount }: { productCount: number }) {
     <>
       <header className="glass-panel sticky top-0 z-40 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-white/80 px-4 py-3 shadow-header sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <LedlumLogo className="h-10 w-auto" />
-          <div className="hidden h-8 w-px bg-gray-mid sm:block" />
+          <AdminMenuButton />
+          <LedlumLogo className={`h-10 w-auto ${lgHide}`} />
+          <div className={`hidden h-8 w-px bg-gray-mid sm:block ${inShell ? 'lg:hidden' : ''}`} />
           <div className="hidden sm:block">
             <p className="text-sm font-extrabold text-foreground">Product dashboard</p>
             <p className="text-[11px] font-pop text-gray-dark">{productCount} products available</p>
@@ -88,7 +94,7 @@ export default function Header({ productCount }: { productCount: number }) {
             </button>
           )}
 
-          <div className="flex min-w-0 items-center gap-2 rounded-full border border-gray-mid bg-white/80 px-2.5 py-1.5 sm:px-3">
+          <div className={`flex min-w-0 items-center gap-2 rounded-full border border-gray-mid bg-white/80 px-2.5 py-1.5 sm:px-3 ${lgHide}`}>
             <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold font-bai ${AVATAR_STYLES[user.role] ?? 'bg-primary text-white'}`}>
               {user.initials}
             </div>
@@ -106,7 +112,7 @@ export default function Header({ productCount }: { productCount: number }) {
           <button
             onClick={logout}
             title="Sign out"
-            className="tap-target flex items-center gap-1.5 rounded-xl border border-gray-mid bg-white/80 px-3 py-2 text-sm font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary"
+            className={`tap-target flex items-center gap-1.5 rounded-xl border border-gray-mid bg-white/80 px-3 py-2 text-sm font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary ${lgHide}`}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>

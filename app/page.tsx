@@ -5,10 +5,13 @@ import { useAuth } from '@/context/AuthContext'
 import AuthScreen from '@/components/AuthScreen'
 import CatalogPage from '@/components/CatalogPage'
 import PageSpinner from '@/components/PageSpinner'
+import AdminShell, { AdminMenuButton, type AdminSection } from '@/components/AdminShell'
+import VendorManager from '@/components/VendorManager'
 
 function PageInner() {
   const { user, loading: authLoading } = useAuth()
   const [hydrated, setHydrated] = useState(false)
+  const [section, setSection] = useState<AdminSection>('products')
 
   // Mark hydrated after mount to avoid SSR/client mismatch
   useEffect(() => {
@@ -22,7 +25,35 @@ function PageInner() {
   if (!user) return <AuthScreen />
 
   // Go straight to the catalogue after login (no browse chooser step)
-  return <CatalogPage initialMode="product" />
+  if (user.role !== 'admin') return <CatalogPage initialMode="product" />
+
+  // Admins get a sidebar with separate sections. The catalogue stays mounted
+  // (just hidden) while on another section so its filters/scroll position
+  // survive switching back.
+  return (
+    <AdminShell section={section} onSection={setSection}>
+      <div className={section === 'products' ? '' : 'hidden'}>
+        <CatalogPage initialMode="product" />
+      </div>
+
+      {section === 'vendors' && (
+        <div className="min-h-screen app-shell">
+          <header className="glass-panel sticky top-0 z-40 flex min-h-16 items-center gap-3 border-b border-white/80 px-4 py-3 shadow-header sm:px-6 lg:px-8">
+            <AdminMenuButton />
+            <div>
+              <p className="text-sm font-extrabold text-foreground font-bai">Vendors</p>
+              <p className="text-[11px] font-pop text-gray-dark">Create and manage vendor accounts</p>
+            </div>
+          </header>
+          <main className="px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-4xl">
+              <VendorManager isOpen inline onClose={() => setSection('products')} />
+            </div>
+          </main>
+        </div>
+      )}
+    </AdminShell>
+  )
 }
 
 export default function Page() {

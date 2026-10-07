@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useZones } from '@/context/ZonesContext'
 import type { CollectionNode } from '@/lib/services/products'
 import VendorManager from './VendorManager'
+import { useAdminShell } from './AdminShell'
 
 type View = 'grid' | 'list'
 
@@ -54,6 +55,10 @@ export default function Toolbar({
 }: ToolbarProps) {
   const { can, user } = useAuth()
   const { zones } = useZones()
+  // Vendors has its own section in the admin sidebar — only show the toolbar
+  // shortcut where there's no sidebar (e.g. /zone pages).
+  const adminShell = useAdminShell()
+  const showVendorButton = user?.role === 'admin' && !adminShell
 
   const [vendorOpen, setVendorOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -137,7 +142,7 @@ export default function Toolbar({
           </button>
         )}
 
-        {user?.role === 'admin' && (
+        {showVendorButton && (
           <button
             onClick={() => setVendorOpen(true)}
             className="tap-target flex h-11 flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-mid bg-white/80 px-3.5 text-sm font-semibold text-gray-text transition-colors hover:border-primary hover:text-primary"
@@ -152,7 +157,7 @@ export default function Toolbar({
           </button>
         )}
 
-        {user?.role === 'admin' && (
+        {showVendorButton && (
           <VendorManager isOpen={vendorOpen} onClose={() => setVendorOpen(false)} />
         )}
       </div>
