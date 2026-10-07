@@ -12,8 +12,41 @@ export function siteOrigin(req: NextRequest): string {
   return (process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin).replace(/\/$/, '')
 }
 
-const escapeHtml = (s: string) =>
+export const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+interface SendInput {
+  to: string | string[]
+  subject: string
+  html: string
+  replyTo?: string
+}
+
+/** Sends one email via Resend. Returns null on success, or an error message. */
+export async function sendEmail({ to, subject, html, replyTo }: SendInput): Promise<string | null> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) return 'RESEND_API_KEY is not configured'
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: FROM,
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        html,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      return body?.message ?? `Email provider returned ${res.status}`
+    }
+    return null
+  } catch (err) {
+    return err instanceof Error ? err.message : 'Failed to send email'
+  }
+}
 
 const COPY: Record<TokenPurpose, { subject: string; heading: string; body: string; button: string }> = {
   invite: {
@@ -37,9 +70,6 @@ export function actionLink(req: NextRequest, user: ProfileRow, purpose: TokenPur
 
 /** Sends an invite / reset email. Returns null on success, or an error message. */
 export async function sendActionEmail(user: ProfileRow, purpose: TokenPurpose, link: string): Promise<string | null> {
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) return 'RESEND_API_KEY is not configured'
-
   const copy = COPY[purpose]
   const html = `
       <div style="font-family:sans-serif;max-width:520px;color:#1a1a1a;">
@@ -52,18 +82,5 @@ export async function sendActionEmail(user: ProfileRow, purpose: TokenPurpose, l
         <p style="font-size:13px;color:#666;">This link expires in ${TOKEN_TTL_LABEL[purpose]} and can only be used once.<br/>If the button doesn't work, paste this into your browser:<br/>${link}</p>
       </div>`
 
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [user.email], subject: copy.subject, html }),
-    })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      return body?.message ?? `Email provider returned ${res.status}`
-    }
-    return null
-  } catch (err) {
-    return err instanceof Error ? err.message : 'Failed to send email'
-  }
+  return sendEmail({ to: user.email, subject: copy.subject, html })
 }

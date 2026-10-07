@@ -9,7 +9,7 @@ import { useToast } from '@/context/ToastContext'
 import { useZones } from '@/context/ZonesContext'
 import { type BoqRow, type BoqMeta, SAMPLE_META } from '@/boq/BOQDocument'
 import { applySelection } from '@/lib/cartSpecs'
-import { trackActivity } from '@/lib/supabaseClient'
+import { authFetch, trackActivity } from '@/lib/supabaseClient'
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQty, clearCart } = useCart()
@@ -18,6 +18,7 @@ export default function CartDrawer() {
   const { getZoneById } = useZones()
   const [sending, setSending] = useState(false)
   const [sent, setSent]       = useState(false)
+  const [note, setNote]       = useState('')
   const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const totalQty = items.reduce((s, i) => s + i.quantity, 0)
@@ -106,17 +107,41 @@ export default function CartDrawer() {
     }
   }
 
+  // Emails the quote to LEDLUM (projects@ledlumlighting.com) via /api/quote-request;
+  // the partner gets a confirmation copy. Logged server-side as 'quote_sent'.
   const handleSendQuote = async () => {
-    if (items.length === 0) return
+    if (items.length === 0 || sending) return
     setSending(true)
-    const body    = buildEmailBody()
-    const subject = `Quote Request — ${user?.company ?? user?.name ?? 'Partner'} — ${new Date().toLocaleDateString('en-IN')}`
-    trackActivity('quote_sent', { items: quoteSummary(), totalQty })
-    window.location.href = `mailto:sales@ledlum.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    await new Promise(r => setTimeout(r, 800))
-    setSent(true); setSending(false)
-    toast('Quote request opened in your email client', 'success')
-    setTimeout(() => setSent(false), 4000)
+    try {
+      const res = await authFetch('/api/quote-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          note,
+          items: items.map(i => ({
+            productCode: i.productCode,
+            productName: i.productName,
+            context:     itemContext(i),
+            quantity:    i.quantity,
+            selection:   i.selection,
+          })),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast(data.error ?? 'Could not send your quote request', 'error'); return }
+      setSent(true); setNote('')
+      toast(
+        data.confirmationSent
+          ? 'Quote request sent to LEDLUM — a copy has been emailed to you'
+          : 'Quote request sent to LEDLUM',
+        'success',
+      )
+      setTimeout(() => setSent(false), 4000)
+    } catch {
+      toast('Network error — quote request not sent', 'error')
+    } finally {
+      setSending(false)
+    }
   }
 
   const handleCopyQuote = () => {
@@ -239,10 +264,18 @@ export default function CartDrawer() {
               <span className="text-gray-text font-pop">Total items in quote</span>
               <span className="font-bold font-bai text-foreground">{totalQty}</span>
             </div>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              maxLength={2000}
+              rows={2}
+              placeholder="Add a note for LEDLUM (optional) — project name, delivery date…"
+              className="w-full resize-none rounded-xl border border-gray-mid bg-white px-3 py-2 text-sm font-pop text-foreground placeholder:text-gray-dark outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
             <button onClick={handleSendQuote} disabled={sending}
               className="w-full flex items-center justify-center gap-2 py-3 bg-primary hover:bg-primary-dark disabled:opacity-60 text-white rounded-xl font-bold font-bai text-sm transition-colors">
               {sending ? (
-                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Opening email…</>
+                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Sending…</>
               ) : sent ? (
                 <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg> Sent!</>
               ) : (

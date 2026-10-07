@@ -12,12 +12,14 @@ export type ActivityEvent =
   | 'password_changed' | 'password_change_skipped'
   // catalogue / quote activity (reported by the browser)
   | 'product_viewed' | 'quote_item_added' | 'quote_item_removed'
-  | 'quote_sent' | 'quote_copied' | 'boq_downloaded'
+  | 'quote_copied' | 'boq_downloaded'
+  // written by /api/quote-request
+  | 'quote_sent' | 'quote_failed'
 
 /** Events the browser is allowed to report via POST /api/activity. */
 export const CLIENT_EVENTS: ActivityEvent[] = [
   'logout', 'product_viewed', 'quote_item_added', 'quote_item_removed',
-  'quote_sent', 'quote_copied', 'boq_downloaded',
+  'quote_copied', 'boq_downloaded',
 ]
 
 interface LogInput {
