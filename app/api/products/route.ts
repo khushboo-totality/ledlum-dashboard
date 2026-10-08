@@ -12,13 +12,14 @@ export async function GET(req: NextRequest) {
   const collection  = searchParams.get('collection') || undefined
   const groupName   = searchParams.get('groupName') || undefined
   const productType = searchParams.get('productType') || undefined
+  const newOnly     = searchParams.get('newOnly') === '1'
   const limitParam  = searchParams.get('limit')
   const offsetParam = searchParams.get('offset')
   const limit  = limitParam  ? Number(limitParam)  : undefined
   const offset = offsetParam ? Number(offsetParam) : undefined
 
   const { items, hasMore } = await listProducts({
-    zone, search, category, source, collection, groupName, productType, limit, offset,
+    zone, search, category, source, collection, groupName, productType, newOnly, limit, offset,
   })
   return NextResponse.json({ data: items, hasMore })
 }

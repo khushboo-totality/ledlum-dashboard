@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { Product } from '@/types'
 import { useAuth } from '@/context/AuthContext'
 import { getImageUrl } from '@/lib/auth'
+import { isNewProduct } from '@/lib/catalogFilters'
 
 interface ProductCardProps {
   product: Product
@@ -52,12 +53,13 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
           </div>
         )}
 
-        <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1">
-          <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase shadow-sm font-pop ${
-            product.source === 'external' ? 'bg-green-100 text-green-700' : 'bg-black/60 text-white'
-          }`}>
-            {product.source}
-          </span>
+        <div className="pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-1">
+          {isNewProduct(product) && (
+            <span className="flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-[9px] font-bold uppercase text-white shadow-sm ring-2 ring-amber-200 font-pop">
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.9L22 9.3l-5.5 4.8L18.2 21 12 17.3 5.8 21l1.7-6.9L2 9.3l7.1-.4z"/></svg>
+              New
+            </span>
+          )}
           {hasDetail && (
             <span className="rounded-full bg-primary px-2.5 py-1 text-[9px] font-bold uppercase text-white shadow-sm font-pop">
               Configure

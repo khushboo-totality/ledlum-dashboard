@@ -164,7 +164,6 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
   if (!product && !open) return null
 
   const imgUrl    = product ? getImageUrl(product.ImageLink ?? '') : null
-  const fmt       = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   const zone      = getZoneById(product?.zone ?? '')
 
   // Prefer the product's real Supabase image(s) over the static demo
@@ -185,8 +184,18 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
   // gets the same rich Overview tab instead of two different layouts.
   const specRows: { k: string; v: string }[] = []
   const addSpec = (k: string, v?: string | null) => { if (v) specRows.push({ k, v }) }
-  addSpec('Category',       category)
-  addSpec('Wattage',        detail?.config?.watts?.join(', ')       ?? product?.watts)
+  // Same wording as the catalogue filters: Category = main category
+  // (indoor / outdoor / artizan …), Subcategory = group_name.
+  addSpec('Category',       product?.collection ? product.collection.charAt(0).toUpperCase() + product.collection.slice(1) : undefined)
+  addSpec('Subcategory',    category)
+  // Prices from ledlum_product_prices — "D.P." plus any length variants
+  // ("D.P. (2 Mtr)" …). Signed-in users only, not guests.
+  if (user && user.role !== 'guest' && product?.prices) {
+    Object.entries(product.prices)
+      .sort(([a], [b]) => (a === 'D.P.' ? -1 : b === 'D.P.' ? 1 : a.localeCompare(b, undefined, { numeric: true })))
+      .forEach(([k, v]) => addSpec(k, `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`))
+  }
+  addSpec('Wattage',       detail?.config?.watts?.join(', ')       ?? product?.watts)
   addSpec('Luminous',       detail?.config?.luminous?.join(', ')    ?? product?.luminous)
   addSpec('CRI',            detail?.config?.cri?.join(', ')         ?? product?.cri)
   addSpec('IP Rating',      detail?.config?.ipRating?.join(', ')    ?? product?.ip_rating)
@@ -198,12 +207,8 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
   addSpec('Cutout Size',    detail?.config?.cutoutSizes?.join(', ') ?? product?.cutout_size)
   addSpec('CCT',            !detail?.config?.cct && product?.cct?.length ? product.cct.join(', ') : undefined)
   addSpec('Family',         product?.family)
-  addSpec('Indoor/Outdoor', product?.collection)
-  addSpec('Product Type',   product?.product_type)
-  addSpec('Website',        product?.website)
   addSpec('Zone',           zone?.label ?? product?.zone)
   addSpec('Source',         product?.source)
-  addSpec('Added',          product?.createdAt ? fmt(product.createdAt) : undefined)
   Object.entries(product?.extra_specs ?? {})
     .filter(([, v]) => v && v !== 'N/A')
     .forEach(([k, v]) => addSpec(k, v))
@@ -305,7 +310,7 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                   <button
                     key={i}
                     onClick={() => setGalleryIdx(i)}
-                    className={`relative flex-shrink-0 snap-start w-11 h-11 sm:w-14 sm:h-14 rounded-lg overflow-hidden border-2 transition-all ${galleryIdx === i ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                    className={`relative flex-shrink-0 snap-start w-11 h-11 sm:w-14 sm:h-14 rounded-lg overflow-hidden border-2 bg-white transition-all ${galleryIdx === i ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'}`}
                   >
                     <ProgressiveImage src={g} alt="" variant="thumb" sizes="56px" className="object-contain" />
                   </button>
@@ -500,8 +505,8 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                     <div className="grid grid-cols-2 gap-3">
                       {galleries.map((g, i) => (
                         <button key={i} onClick={() => { setGalleryIdx(i); setActiveTab('overview') }}
-                          className="relative aspect-[4/5] rounded-xl overflow-hidden border border-gray hover:border-primary transition-colors">
-                          <ProgressiveImage src={g} alt="" variant="card" sizes="(max-width: 768px) 50vw, 280px" className="object-cover" />
+                          className="relative aspect-[4/5] rounded-xl overflow-hidden border border-gray bg-white hover:border-primary transition-colors">
+                          <ProgressiveImage src={g} alt="" variant="card" sizes="(max-width: 768px) 50vw, 280px" className="object-contain" />
                         </button>
                       ))}
                     </div>
@@ -564,13 +569,13 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
       {/* ── Image lightbox ── */}
       {lightboxSrc && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-6"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-white p-6"
           onClick={() => setLightboxSrc(null)}
         >
           <button
             onClick={() => setLightboxSrc(null)}
             aria-label="Close"
-            className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border border-white/30 text-white transition-colors hover:bg-white/10"
+            className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full border border-gray-mid text-foreground transition-colors hover:bg-primary hover:text-white hover:border-primary"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>

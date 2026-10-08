@@ -102,6 +102,7 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
   const [luminous, setLuminous]             = useState('')
   const [cri, setCri]                       = useState('')
   const [website, setWebsite]               = useState('')
+  const [dp, setDp]                         = useState('')   // D.P. (dealer price), rupees
 
   const [loading, setLoading] = useState(false)
   const isOpen = mode !== null
@@ -170,6 +171,7 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
       setLuminous(product.luminous ?? '')
       setCri(product.cri ?? '')
       setWebsite(product.website ?? '')
+      setDp(product.prices?.['D.P.'] != null ? String(product.prices['D.P.']) : '')
       setSpecsOpen(false)
       setStep('details')
     } else if (mode === 'create') {
@@ -177,7 +179,7 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
       setFamily(''); setCollection(''); setProductType('')
       setHeroDescription(''); setGalleryImages([]); setWatts(''); setDimensions('')
       setCutoutSize(''); setBodyColors(''); setCct(''); setBeamAngle('')
-      setIpRating(''); setLedChip(''); setLuminous(''); setCri(''); setWebsite('')
+      setIpRating(''); setLedChip(''); setLuminous(''); setCri(''); setWebsite(''); setDp('')
       setSpecsOpen(false)
       setSelectedZones(currentZone ? [currentZone] : [])
       setStep('main')
@@ -371,7 +373,11 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
 
   const selectedCategory = categories.find(c => String(c.id) === categoryId)
   const mainValue = collection === NEW_MAIN ? newMain.trim().toLowerCase() : collection
-  const canSubmit = !!codes.trim() && categoryId !== NEW_CATEGORY && collection !== NEW_MAIN && !loading
+  // D.P.: blank = no price; otherwise a non-negative number (commas allowed).
+  const dpText  = dp.replace(/[,₹\s]/g, '')
+  const dpValue = dpText === '' ? null : Number(dpText)
+  const dpInvalid = dpValue !== null && (!Number.isFinite(dpValue) || dpValue < 0)
+  const canSubmit = !!codes.trim() && categoryId !== NEW_CATEGORY && collection !== NEW_MAIN && !loading && !dpInvalid
 
   const handleSubmit = async () => {
     if (!canSubmit) return
@@ -411,6 +417,8 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
         luminous: luminous.trim() || undefined,
         cri: cri.trim() || undefined,
         website: website.trim() || undefined,
+        // Only sent when set now or previously set (so it can be cleared).
+        ...(dpValue !== null || product?.prices?.['D.P.'] != null ? { dp: dpValue } : {}),
       })
       onClose()
     } finally { setLoading(false) }
@@ -695,12 +703,21 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
           {step === 'details' && (
             <>
               <div className="px-7 py-5 space-y-4">
-                <div>
-                  <label className={labelCls}>
-                    Model / Product Code <span className="text-primary">*</span>
-                  </label>
-                  <input type="text" value={codes} onChange={e => setCodes(e.target.value)}
-                    placeholder="e.g. LLF-RD-12W" className={inputCls} autoFocus />
+                <div className="grid grid-cols-[1fr_9rem] gap-3">
+                  <div>
+                    <label className={labelCls}>
+                      Model / Product Code <span className="text-primary">*</span>
+                    </label>
+                    <input type="text" value={codes} onChange={e => setCodes(e.target.value)}
+                      placeholder="e.g. LLF-RD-12W" className={inputCls} autoFocus />
+                  </div>
+                  <div>
+                    <label className={labelCls}>D.P. (₹)</label>
+                    <input type="text" inputMode="decimal" value={dp} onChange={e => setDp(e.target.value)}
+                      placeholder="e.g. 1250"
+                      className={`${inputCls} ${dpInvalid ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`} />
+                    {dpInvalid && <p className="mt-1 text-[10px] text-red-500 font-pop">Enter a valid price</p>}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -812,10 +829,10 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
                 <div>
                   <label className={labelCls}>Hero Image</label>
                   <div className="flex gap-3">
-                    <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border border-gray-mid bg-gray">
+                    <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl border border-gray-mid bg-white">
                       {hero?.preview ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={hero.preview} alt="Hero" className="h-full w-full object-cover" />
+                        <img src={hero.preview} alt="Hero" className="h-full w-full object-contain" />
                       ) : (
                         <div className="flex h-full items-center justify-center text-gray-dark">
                           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -874,10 +891,10 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
                   {galleryImages.length > 0 && (
                     <div className="mb-2 grid grid-cols-4 gap-2 sm:grid-cols-5">
                       {galleryImages.map((item, i) => (
-                        <div key={item.id} className="group relative aspect-square overflow-hidden rounded-lg border border-gray-mid bg-gray">
+                        <div key={item.id} className="group relative aspect-square overflow-hidden rounded-lg border border-gray-mid bg-white">
                           {item.preview && (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.preview} alt={`Gallery ${i + 1}`} className="h-full w-full object-cover" />
+                            <img src={item.preview} alt={`Gallery ${i + 1}`} className="h-full w-full object-contain" />
                           )}
                           {item.file && <PendingBadge />}
                           <div className="absolute inset-0 flex flex-col justify-between bg-black/50 p-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

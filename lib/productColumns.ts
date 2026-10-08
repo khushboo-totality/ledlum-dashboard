@@ -7,6 +7,7 @@
 export const EXCLUDED_COLUMNS = new Set([
   'id',
   'category_id', // FK to ledlum_categories — its name is already in group_name
+  'is_track',
   'family',
   'group_name',
   'hero_description',

@@ -13,6 +13,8 @@ export interface ProductQueryFilters {
   collection?: string
   groupName?: string
   productType?: string
+  /** Only products with product_type = 'new'. */
+  newOnly?: boolean
 }
 
 export interface UseProductsOptions {
@@ -53,6 +55,7 @@ export function useProducts(zone?: string, options?: UseProductsOptions) {
     if (filters?.collection)  params.set('collection',  filters.collection)
     if (filters?.groupName)   params.set('groupName',   filters.groupName)
     if (filters?.productType) params.set('productType', filters.productType)
+    if (filters?.newOnly)     params.set('newOnly',     '1')
     params.set('limit', String(PAGE_SIZE))
     params.set('offset', String(offset))
     return params

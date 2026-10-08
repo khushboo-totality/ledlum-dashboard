@@ -80,7 +80,58 @@ interface ProductRow {
   extra_specs: Record<string, string> | null
 }
 
-function mapRowToProduct(row: ProductRow, zoneSlugs: string[]): Product {
+// ── Prices (ledlum_product_prices: model -> { "D.P.": "Rs.960.00", … }) ──
+const PRICE_TABLE = 'ledlum_product_prices'
+export const DP_KEY = 'D.P.'
+
+/** "Rs.1,565.00" -> 1565; null if not a number. */
+function parsePrice(v: unknown): number | null {
+  const n = Number(String(v ?? '').replace(/rs\.?|₹|,|\s/gi, ''))
+  return String(v ?? '').trim() !== '' && Number.isFinite(n) ? n : null
+}
+
+async function getPricesForModels(models: string[]): Promise<Map<string, Record<string, number>>> {
+  const result = new Map<string, Record<string, number>>()
+  const unique = Array.from(new Set(models.filter(Boolean)))
+  for (const batch of chunk(unique, ID_CHUNK_SIZE)) {
+    const { data, error } = await supabaseAdmin.from(PRICE_TABLE).select('model, prices').in('model', batch)
+    if (error) throw new Error(`Failed to load prices: ${error.message}`)
+    for (const r of (data ?? []) as { model: string; prices: Record<string, unknown> | null }[]) {
+      const parsed: Record<string, number> = {}
+      for (const [k, v] of Object.entries(r.prices ?? {})) {
+        const n = parsePrice(v)
+        if (n !== null) parsed[k] = n
+      }
+      result.set(r.model, parsed)
+    }
+  }
+  return result
+}
+
+/** Sets (or clears, with null) a product's D.P. in ledlum_product_prices,
+ * keeping any other price keys (e.g. "D.P. (2 Mtr)") on that row. */
+async function setProductDp(model: string, dp: number | null): Promise<void> {
+  const { data: existing, error } = await supabaseAdmin
+    .from(PRICE_TABLE).select('prices').eq('model', model).maybeSingle()
+  if (error) throw new Error(`Failed to load price: ${error.message}`)
+
+  const prices: Record<string, unknown> = { ...((existing?.prices as Record<string, unknown> | null) ?? {}) }
+  if (dp === null) delete prices[DP_KEY]
+  else prices[DP_KEY] = `Rs.${dp.toFixed(2)}`
+  const now = new Date().toISOString()
+
+  if (existing) {
+    const { error: upErr } = Object.keys(prices).length
+      ? await supabaseAdmin.from(PRICE_TABLE).update({ prices, updated_at: now }).eq('model', model)
+      : await supabaseAdmin.from(PRICE_TABLE).delete().eq('model', model)
+    if (upErr) throw new Error(`Failed to save price: ${upErr.message}`)
+  } else if (dp !== null) {
+    const { error: insErr } = await supabaseAdmin.from(PRICE_TABLE).insert({ model, prices, updated_at: now })
+    if (insErr) throw new Error(`Failed to save price: ${insErr.message}`)
+  }
+}
+
+function mapRowToProduct(row: ProductRow, zoneSlugs: string[], prices?: Record<string, number>): Product {
   return {
     id: String(row.id),
     // Legacy fields — keep the old UI/product-taxonomy contract working.
@@ -123,6 +174,7 @@ function mapRowToProduct(row: ProductRow, zoneSlugs: string[]): Product {
     cri: row.cri,
     website: row.website,
     product_type: row.product_type,
+    prices: prices && Object.keys(prices).length ? prices : null,
     extra_specs: row.extra_specs && Object.keys(row.extra_specs).length ? row.extra_specs : null,
     attributes: toDisplayAttributes(row as unknown as Record<string, unknown>),
   }
@@ -246,6 +298,8 @@ export interface ProductFilters {
   collection?: string
   groupName?: string
   productType?: string
+  /** Only products flagged ledlum_products.product_type = 'new'. */
+  newOnly?: boolean
   /** When set, paginates the result instead of returning everything. */
   limit?: number
   offset?: number
@@ -277,6 +331,7 @@ export async function listProducts(filters?: ProductFilters): Promise<ProductPag
       if (filters?.collection) q = q.eq('collection', filters.collection)
       if (filters?.groupName) q = q.eq('group_name', filters.groupName)
       if (filters?.productType) q = q.eq('category', filters.productType)
+      if (filters?.newOnly) q = q.ilike('product_type', NEW_PRODUCT_TYPE)
       if (filters?.search) {
         const s = filters.search.replace(/[%_,]/g, ' ').trim()
         if (s) q = q.or(`model.ilike.%${s}%,group_name.ilike.%${s}%`)
@@ -312,8 +367,11 @@ export async function listProducts(filters?: ProductFilters): Promise<ProductPag
     }
   }
 
-  const zoneMap = await getZoneSlugsForProductIds(rows.map(r => r.id))
-  let products = rows.map(r => mapRowToProduct(r, zoneMap.get(r.id) ?? []))
+  const [zoneMap, priceMap] = await Promise.all([
+    getZoneSlugsForProductIds(rows.map(r => r.id)),
+    getPricesForModels(rows.map(r => r.model ?? '')),
+  ])
+  let products = rows.map(r => mapRowToProduct(r, zoneMap.get(r.id) ?? [], priceMap.get(r.model ?? '')))
 
   if (filters?.zone) {
     const legacy = await getUnmatchedZoneProducts(filters.zone, { search: filters.search, category: filters.category })
@@ -336,8 +394,12 @@ export async function getProductById(id: string): Promise<Product | null> {
   const { data, error } = await supabaseAdmin.from(TABLE).select('*').eq('id', numId).maybeSingle()
   if (error) throw new Error(`Failed to get product: ${error.message}`)
   if (!data) return null
-  const zoneMap = await getZoneSlugsForProductIds([numId])
-  return mapRowToProduct(data as ProductRow, zoneMap.get(numId) ?? [])
+  const row = data as ProductRow
+  const [zoneMap, priceMap] = await Promise.all([
+    getZoneSlugsForProductIds([numId]),
+    getPricesForModels([row.model ?? '']),
+  ])
+  return mapRowToProduct(row, zoneMap.get(numId) ?? [], priceMap.get(row.model ?? ''))
 }
 
 function formToInsertRow(data: Partial<ProductFormData>) {
@@ -377,10 +439,14 @@ export async function createProduct(data: ProductFormData): Promise<Product> {
 
   const zoneSlugs = data.zones?.length ? data.zones : data.zone ? [data.zone] : []
   await setProductZones(row.id, zoneSlugs)
+  if (data.dp !== undefined && row.model) await setProductDp(row.model, data.dp)
 
-  const zoneMap = await getZoneSlugsForProductIds([row.id])
+  const [zoneMap, priceMap] = await Promise.all([
+    getZoneSlugsForProductIds([row.id]),
+    getPricesForModels([row.model ?? '']),
+  ])
   invalidateAggregateCaches()
-  return mapRowToProduct(row as ProductRow, zoneMap.get(row.id) ?? [])
+  return mapRowToProduct(row as ProductRow, zoneMap.get(row.id) ?? [], priceMap.get(row.model ?? ''))
 }
 
 export async function updateProduct(id: string, data: Partial<ProductFormData>): Promise<Product | null> {
@@ -409,6 +475,13 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
   if (data.website !== undefined) updateRow.website = data.website || null
   if (data.product_type !== undefined) updateRow.product_type = data.product_type || null
 
+  // Prices are keyed by model — remember the old one in case it's being renamed.
+  let oldModel: string | null = null
+  if (data.Codes !== undefined) {
+    const { data: before } = await supabaseAdmin.from(TABLE).select('model').eq('id', numId).maybeSingle()
+    oldModel = before?.model ?? null
+  }
+
   let row: ProductRow | null
   if (Object.keys(updateRow).length > 0) {
     const { data: updated, error } = await supabaseAdmin
@@ -425,9 +498,19 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
   if (data.zones !== undefined) await setProductZones(numId, data.zones)
   else if (data.zone !== undefined) await setProductZones(numId, data.zone ? [data.zone] : [])
 
-  const zoneMap = await getZoneSlugsForProductIds([numId])
+  // Model renamed -> move its price row along with it.
+  if (oldModel && row.model && oldModel !== row.model) {
+    const { error: mvErr } = await supabaseAdmin.from(PRICE_TABLE).update({ model: row.model }).eq('model', oldModel)
+    if (mvErr) throw new Error(`Failed to move price to new model: ${mvErr.message}`)
+  }
+  if (data.dp !== undefined && row.model) await setProductDp(row.model, data.dp)
+
+  const [zoneMap, priceMap] = await Promise.all([
+    getZoneSlugsForProductIds([numId]),
+    getPricesForModels([row.model ?? '']),
+  ])
   invalidateAggregateCaches()
-  return mapRowToProduct(row, zoneMap.get(numId) ?? [])
+  return mapRowToProduct(row, zoneMap.get(numId) ?? [], priceMap.get(row.model ?? ''))
 }
 
 export async function deleteProduct(id: string): Promise<boolean> {
@@ -475,7 +558,17 @@ export async function getCategories(zone?: string): Promise<string[]> {
 
 export interface ProductTypeNode { name: string; count: number }
 export interface GroupNameNode { name: string; count: number; productTypes: ProductTypeNode[] }
-export interface CollectionNode { name: string; label: string; count: number; groupNames: GroupNameNode[] }
+export interface CollectionNode {
+  name: string
+  label: string
+  count: number
+  /** Products in this collection with product_type = 'new' (drives the "New" chip). */
+  newCount: number
+  groupNames: GroupNameNode[]
+}
+
+/** ledlum_products.product_type value marking new arrivals. */
+export const NEW_PRODUCT_TYPE = 'new'
 
 /**
  * Real 3-level hierarchy for the "Browse by Product Type" dashboard, derived
@@ -485,13 +578,17 @@ export interface CollectionNode { name: string; label: string; count: number; gr
 export async function getProductTaxonomy(): Promise<CollectionNode[]> {
   if (taxonomyCache.data && taxonomyCache.expires > Date.now()) return taxonomyCache.data
 
-  const rows = await selectAllPages<{ collection: string | null; group_name: string | null; category: string | null }>(
-    (from, to) => supabaseAdmin.from(TABLE).select('collection, group_name, category').order('id').range(from, to)
+  const rows = await selectAllPages<{ collection: string | null; group_name: string | null; category: string | null; product_type: string | null }>(
+    (from, to) => supabaseAdmin.from(TABLE).select('collection, group_name, category, product_type').order('id').range(from, to)
   )
 
   const collections = new Map<string, Map<string, Map<string, number>>>()
+  const newCounts = new Map<string, number>()
   for (const row of rows) {
     const collection = row.collection || 'Uncategorized'
+    if (row.product_type?.trim().toLowerCase() === NEW_PRODUCT_TYPE) {
+      newCounts.set(collection, (newCounts.get(collection) ?? 0) + 1)
+    }
     const groupName = row.group_name || 'Uncategorized'
     const productType = row.category || null
 
@@ -518,6 +615,7 @@ export async function getProductTaxonomy(): Promise<CollectionNode[]> {
       name,
       label: name.charAt(0).toUpperCase() + name.slice(1),
       count,
+      newCount: newCounts.get(name) ?? 0,
       groupNames,
     }
   }).sort((a, b) => b.count - a.count)

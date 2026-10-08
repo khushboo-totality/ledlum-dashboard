@@ -5,6 +5,7 @@ import { useState } from 'react'
 import type { Product } from '@/types'
 import { useAuth } from '@/context/AuthContext'
 import { getImageUrl } from '@/lib/auth'
+import { isNewProduct } from '@/lib/catalogFilters'
 
 interface ProductRowProps {
   product: Product
@@ -29,9 +30,9 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
       style={{ animationDelay: delay }}
     >
       {/* Thumb */}
-      <div className="w-12 h-12 rounded-lg bg-gray overflow-hidden flex-shrink-0 flex items-center justify-center relative">
+      <div className="w-12 h-12 rounded-lg bg-white border border-gray overflow-hidden flex-shrink-0 flex items-center justify-center relative">
         {imgUrl && !imgError ? (
-          <ProgressiveImage key={imgUrl} src={imgUrl} alt={displayCode} variant="thumb" sizes="48px" className="object-cover" onError={() => setImgError(true)} />
+          <ProgressiveImage key={imgUrl} src={imgUrl} alt={displayCode} variant="thumb" sizes="48px" className="object-contain" onError={() => setImgError(true)} />
         ) : (
           <svg className="opacity-20" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -44,6 +45,11 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
       {/* Code + badges */}
       <div className="flex items-center gap-2 min-w-[160px]">
         <span className="font-bold text-sm font-bai text-foreground truncate">{displayCode}</span>
+        {isNewProduct(product) && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide font-pop bg-amber-500 text-white flex-shrink-0">
+            New
+          </span>
+        )}
         {hasDetail && (
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide font-pop bg-primary/10 text-primary border border-primary/20 flex-shrink-0">
             Config
@@ -57,12 +63,6 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
       </div>
 
       <div className="text-sm text-gray-text font-pop flex-1">{product.Category}</div>
-
-      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide font-pop min-w-[72px] text-center flex-shrink-0 ${
-        product.source === 'external' ? 'bg-green-100 text-green-700' : 'bg-gray text-gray-dark'
-      }`}>
-        {product.source}
-      </span>
 
       {/* Actions */}
       <div className="flex gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>

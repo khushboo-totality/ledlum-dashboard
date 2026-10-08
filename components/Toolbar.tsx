@@ -7,6 +7,7 @@ import { useZones } from '@/context/ZonesContext'
 import type { CollectionNode } from '@/lib/services/products'
 import PartnerManager from './PartnerManager'
 import { useAdminShell } from './AdminShell'
+import { NEW_GROUP, NEW_GROUP_LABEL } from '@/lib/catalogFilters'
 
 type View = 'grid' | 'list'
 
@@ -63,12 +64,14 @@ export default function Toolbar({
   const [partnerOpen, setPartnerOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
+  // "New" is the default subcategory, so it doesn't count as an active filter.
   const activeFilterCount = productTaxonomy
-    ? [productTaxonomy.activeGroup, source].filter(Boolean).length
+    ? [productTaxonomy.activeGroup === NEW_GROUP ? null : productTaxonomy.activeGroup, source].filter(Boolean).length
     : [zoneFilter, showCategoryFilter ? category : '', source].filter(Boolean).length
 
   const activeTaxonomyCollection = productTaxonomy?.collections.find(c => c.name === productTaxonomy.activeCollection) ?? null
   const taxonomyGroupOptions = activeTaxonomyCollection?.groupNames ?? []
+  const taxonomyNewCount = activeTaxonomyCollection?.newCount ?? 0
 
   // Lock scroll + Escape-to-close while the filter drawer is open, matching
   // the ProductDetail slide-in panel's behaviour.
@@ -237,6 +240,9 @@ export default function Toolbar({
                       onChange={e => productTaxonomy.onGroup(e.target.value || null)}
                       className={selectCls}
                     >
+                      {taxonomyNewCount > 0 && (
+                        <option value={NEW_GROUP}>{NEW_GROUP_LABEL} ({taxonomyNewCount})</option>
+                      )}
                       <option value="">All</option>
                       {taxonomyGroupOptions.map(g => (
                         <option key={g.name} value={g.name}>{g.name} ({g.count})</option>

@@ -197,7 +197,7 @@ export default function CartDrawer() {
                 <div key={item.id} className="px-6 py-4">
                   <div className="flex gap-3">
                     {/* Thumb */}
-                    <div className="relative w-14 h-14 bg-gray rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
+                    <div className="relative w-14 h-14 bg-white border border-gray rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
                       {item.productImage ? (
                         <Image src={item.productImage} alt={item.productCode} fill sizes="56px" className="object-contain" unoptimized={skipImageOptimization(item.productImage)} />
                       ) : (

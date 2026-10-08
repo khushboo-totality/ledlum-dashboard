@@ -56,6 +56,8 @@ export interface Product {
   cri?: string | null
   website?: string | null
   product_type?: string | null
+  /** From ledlum_product_prices (by model), in rupees: { "D.P.": 960, "D.P. (2 Mtr)": … }. */
+  prices?: Record<string, number> | null
   extra_specs?: Record<string, string> | null
   /** DB columns (minus internal ones) as display strings, in table order —
    * see lib/productColumns.ts. Drives the PDF columns and their titles. */
@@ -159,6 +161,8 @@ export interface ProductFormData {
   cri?: string
   website?: string
   product_type?: string
+  /** D.P. (dealer price); null clears it, undefined leaves it unchanged. */
+  dp?: number | null
 }
 
 export interface Stats {

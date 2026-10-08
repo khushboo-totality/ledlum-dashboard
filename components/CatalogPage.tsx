@@ -21,8 +21,14 @@ import CrudModal from '@/components/CrudModal'
 import CartDrawer from '@/components/CartDrawer'
 import ToastContainer from '@/components/ToastContainer'
 import { usePathname, useRouter } from 'next/navigation'
+import { NEW_GROUP, NEW_GROUP_LABEL } from '@/lib/catalogFilters'
 
 type ViewLayout = 'grid' | 'list'
+
+/** Default Subcategory when a collection is opened: "New" if it has new products, else All. */
+function defaultGroupFor(collections: CollectionNode[], collection: string): string | null {
+  return (collections.find(c => c.name === collection)?.newCount ?? 0) > 0 ? NEW_GROUP : null
+}
 
 // ── Mode Switcher Dropdown ─────────────────────────────────────────────
 
@@ -233,6 +239,8 @@ function ProductTypePanel({
     )
   }
 
+  const newCount = activeCollectionNode?.newCount ?? 0
+
   return (
     <div className="border-b border-white/80 bg-white/75 backdrop-blur">
       {/* ── Level 1: Collection row ── */}
@@ -240,7 +248,7 @@ function ProductTypePanel({
         {collections.map(c => (
           <button
             key={c.name}
-            onClick={() => { onCollection(c.name); onGroup(null); onProductType(null) }}
+            onClick={() => onCollection(c.name)}   // parent resets subcategory (defaults to "New" where available)
             className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
               activeCollection === c.name
                 ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
@@ -260,6 +268,24 @@ function ProductTypePanel({
       {/* ── Level 2: Category row (real group_name values) ── */}
       {groupNames.length > 0 && (
         <FilterRow label="Subcategory" className="pb-2">
+          {/* "New" chip — product_type = 'new'; only for collections that have any */}
+          {newCount > 0 && (
+            <button
+              onClick={() => { onGroup(NEW_GROUP); onProductType(null) }}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold font-bai whitespace-nowrap transition-all ${
+                activeGroup === NEW_GROUP
+                  ? 'bg-primary text-white shadow-sm ring-2 ring-primary/20'
+                  : 'bg-gray border border-gray-mid text-gray-text hover:border-primary hover:text-primary'
+              }`}
+            >
+              {NEW_GROUP_LABEL}
+              <span className={`text-[9px] font-pop px-1 py-0.5 rounded ${
+                activeGroup === NEW_GROUP ? 'bg-white/25' : 'bg-white text-gray-dark'
+              }`}>
+                {newCount}
+              </span>
+            </button>
+          )}
           {/* "All" chip to reset category */}
           <button
             onClick={() => { onGroup(null); onProductType(null) }}
@@ -449,7 +475,11 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       .then((data: CollectionNode[]) => {
         if (cancelled) return
         setTaxonomy(data)
-        setActiveCollection(prev => (prev && data.some(c => c.name === prev)) ? prev : (data[0]?.name ?? ''))
+        // Fetched once on mount: open on the largest collection, and on its
+        // "New" subcategory if it has new products.
+        const initial = data[0]?.name ?? ''
+        setActiveCollection(initial)
+        setActiveGroup(defaultGroupFor(data, initial))
       })
       .catch(err => console.error('[CatalogPage] taxonomy fetch error:', err))
       .finally(() => { if (!cancelled) setTaxonomyLoading(false) })
@@ -469,7 +499,8 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     const handle = setTimeout(() => {
       fetchPtProducts({
         collection: activeCollection,
-        groupName: activeGroup || undefined,
+        groupName: activeGroup && activeGroup !== NEW_GROUP ? activeGroup : undefined,
+        newOnly: activeGroup === NEW_GROUP,
         productType: activeProductType || undefined,
         search: ptSearch || undefined,
         source: source || undefined,
@@ -567,8 +598,8 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   // and the Toolbar filter drawer's Category/Subcategory selects, so both
   // reset the lower taxonomy levels the same way when a higher one changes.
   const handleTaxonomyCollection = useCallback((c: string) => {
-    setActiveCollection(c); setActiveGroup(null); setActiveProductType(null)
-  }, [])
+    setActiveCollection(c); setActiveGroup(defaultGroupFor(taxonomy, c)); setActiveProductType(null)
+  }, [taxonomy])
   const handleTaxonomyGroup = useCallback((g: string | null) => {
     setActiveGroup(g); setActiveProductType(null)
   }, [])
@@ -606,6 +637,13 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
     [taxonomy, activeCollection]
   )
 
+  // Subcategory recorded on quote items / shown in product detail. Under "New"
+  // that's the product's own subcategory, not the word "New".
+  const subcategoryFor = useCallback((p?: Product | null) =>
+    activeGroup === NEW_GROUP ? (p?.group_name ?? undefined) : (activeGroup ?? undefined),
+  [activeGroup])
+  const subcategoryLabel = subcategoryFor(selectedProduct)
+
   const handleQuickAdd = useCallback((product: Product) => {
     if (!can('cart')) return
     addItem({
@@ -615,14 +653,14 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       zone:               product.zone ?? activeZone ?? '',
       browseMode,
       productCategory:    browseMode === 'product' ? (activeCollectionNode?.label ?? activeCollection) : undefined,
-      productSubcategory: browseMode === 'product' ? activeGroup ?? undefined : undefined,
+      productSubcategory: browseMode === 'product' ? subcategoryFor(product) : undefined,
       productTypeName:    browseMode === 'product' ? activeProductType ?? undefined : undefined,
       productSpecs:       toCartProductSpecs(product),
       selection: {},
       quantity: 1,
     })
     toast(`${product.Codes} added to quote`, 'success')
-  }, [can, addItem, browseMode, activeCollectionNode, activeCollection, activeGroup, activeProductType, activeZone, toast])
+  }, [can, addItem, browseMode, activeCollectionNode, activeCollection, subcategoryFor, activeProductType, activeZone, toast])
 
   const isPartnerOrGuest = user?.role === 'partner' || user?.role === 'guest'  // kept for cart banner only
 
@@ -667,7 +705,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         <ProductTypePanel
           collections={taxonomy}
           activeCollection={activeCollection}
-          onCollection={setActiveCollection}
+          onCollection={handleTaxonomyCollection}
           activeGroup={activeGroup}
           onGroup={setActiveGroup}
           activeProductType={activeProductType}
@@ -810,7 +848,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
         onDelete={() => selectedProduct && handleDelete(selectedProduct)}
         browseMode={browseMode}
         productCategory={browseMode === 'product' ? (activeCollectionNode?.label ?? activeCollection) : undefined}
-        productSubcategory={browseMode === 'product' ? activeGroup ?? undefined : undefined}
+        productSubcategory={browseMode === 'product' ? subcategoryLabel : undefined}
         productTypeName={browseMode === 'product' ? activeProductType ?? undefined : undefined}
         activeZone={activeZone}
       />
