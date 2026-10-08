@@ -10,7 +10,7 @@ import { getImageUrl } from '@/lib/auth'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
 import { SAMPLE_META } from '@/boq/BOQDocument'
-import { toCartProductSpecs } from '@/lib/cartSpecs'
+import { toCartProductSpecs, productDp } from '@/lib/cartSpecs'
 import { formatColumnTitle, toDisplaySpecs } from '@/lib/productColumns'
 import { trackActivity } from '@/lib/supabaseClient'
 
@@ -157,6 +157,8 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
       productSpecs:       toCartProductSpecs(product),
       selection,
       quantity:           qty,
+      unitPrice:          productDp(product),
+      discount:           0,
     })
     toast(`${product.Codes} added to quote`, 'success')
   }

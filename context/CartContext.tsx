@@ -12,6 +12,8 @@ interface CartContextType {
   addItem: (item: Omit<CartItem, 'id' | 'addedAt'>) => void
   removeItem: (id: string) => void
   updateQty: (id: string, qty: number) => void
+  /** Sets a line's discount in percent (clamped to 0–100). */
+  updateDiscount: (id: string, percent: number) => void
   clearCart: () => void
   openCart: () => void
   closeCart: () => void
@@ -60,6 +62,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i))
   }, [])
 
+  const updateDiscount = useCallback((id: string, percent: number) => {
+    const pct = Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 0
+    setItems(prev => prev.map(i => i.id === id ? { ...i, discount: pct } : i))
+  }, [])
+
   const clearCart = useCallback(() => setItems([]), [])
   const openCart  = useCallback(() => setIsOpen(true),  [])
   const closeCart = useCallback(() => setIsOpen(false), [])
@@ -67,7 +74,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const total = items.reduce((sum, i) => sum + i.quantity, 0)
 
   return (
-    <CartContext.Provider value={{ items, isOpen, isPulsing, addItem, removeItem, updateQty, clearCart, openCart, closeCart, total }}>
+    <CartContext.Provider value={{ items, isOpen, isPulsing, addItem, removeItem, updateQty, updateDiscount, clearCart, openCart, closeCart, total }}>
       {children}
     </CartContext.Provider>
   )

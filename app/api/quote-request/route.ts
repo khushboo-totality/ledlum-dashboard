@@ -3,6 +3,7 @@ import { getCaller } from '@/lib/serverAuth'
 import { getPermissions } from '@/lib/auth'
 import { escapeHtml, sendEmail } from '@/lib/email'
 import { logActivity } from '@/lib/activity'
+import { getPricesForModels, DP_KEY } from '@/lib/services/products'
 
 // Where partner quote requests go — same inbox as the LEDLUM website's quote form.
 const QUOTE_TO = process.env.QUOTE_TO_EMAIL || 'projects@ledlumlighting.com'
@@ -14,6 +15,20 @@ interface QuoteItem {
   context: string
   quantity: number
   selection: Record<string, string>
+  /** Partner's discount on this line, percent 0–100. */
+  discount: number
+  /** D.P. per unit — looked up server-side from ledlum_product_prices (never trusted from the client). */
+  unitPrice: number | null
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+const inr = (n: number) =>
+  `₹${n.toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })}`
+
+function linePricing(item: QuoteItem) {
+  if (item.unitPrice === null) return null
+  const net = round2(item.unitPrice * (1 - item.discount / 100))
+  return { net, gross: round2(item.unitPrice * item.quantity), total: round2(net * item.quantity) }
 }
 
 function parseItems(raw: unknown): QuoteItem[] | null {
@@ -30,12 +45,15 @@ function parseItems(raw: unknown): QuoteItem[] | null {
         if (typeof v === 'string' && v) selection[k] = v
       }
     }
+    const discount = Number(o.discount)
     items.push({
       productCode: o.productCode.slice(0, 200),
       productName: (typeof o.productName === 'string' ? o.productName : o.productCode).slice(0, 200),
       context:     typeof o.context === 'string' ? o.context.slice(0, 300) : '',
       quantity:    Math.min(Math.floor(quantity), 1_000_000),
       selection,
+      discount:    Number.isFinite(discount) ? Math.min(100, Math.max(0, discount)) : 0,
+      unitPrice:   null, // filled from the price table below
     })
   }
   return items
@@ -43,24 +61,51 @@ function parseItems(raw: unknown): QuoteItem[] | null {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
+function quoteTotals(items: QuoteItem[]) {
+  let gross = 0, net = 0, unpriced = 0
+  for (const item of items) {
+    const p = linePricing(item)
+    if (!p) { unpriced++; continue }
+    gross += p.gross; net += p.total
+  }
+  return { gross: round2(gross), net: round2(net), discount: round2(gross - net), unpriced, hasPrices: gross > 0 }
+}
+
 function itemsTable(items: QuoteItem[]): string {
   const cell = 'padding:10px 12px;border-bottom:1px solid #eee;vertical-align:top;'
+  const right = `${cell}text-align:right;white-space:nowrap;`
   const rows = items.map((item, i) => {
     const specs = Object.entries(item.selection)
       .map(([k, v]) => `${escapeHtml(cap(k))}: ${escapeHtml(v)}`)
       .join('<br/>')
+    const p = linePricing(item)
     return `<tr>
       <td style="${cell}color:#888;">${i + 1}</td>
       <td style="${cell}"><strong>${escapeHtml(item.productName)}</strong>${
-        item.context ? `<br/><span style="color:#888;font-size:12px;">${escapeHtml(item.context)}</span>` : ''}</td>
-      <td style="${cell}font-size:13px;">${specs || '<span style="color:#aaa;">—</span>'}</td>
-      <td style="${cell}text-align:right;font-weight:600;">${item.quantity}</td>
+        item.context ? `<br/><span style="color:#888;font-size:12px;">${escapeHtml(item.context)}</span>` : ''}${
+        specs ? `<br/><span style="font-size:12px;">${specs}</span>` : ''}</td>
+      <td style="${right}font-weight:600;">${item.quantity}</td>
+      <td style="${right}">${item.unitPrice === null ? '<span style="color:#aaa;">on request</span>' : inr(item.unitPrice)}</td>
+      <td style="${right}">${item.discount ? `${item.discount}%` : '—'}</td>
+      <td style="${right}font-weight:600;">${p ? inr(p.total) : '—'}</td>
     </tr>`
   }).join('')
+  const t = quoteTotals(items)
+  const totalRow = (label: string, value: string, bold = false) =>
+    `<tr><td colspan="5" style="padding:6px 12px;text-align:right;${bold ? 'font-weight:700;' : 'color:#666;'}">${label}</td>
+      <td style="padding:6px 12px;text-align:right;white-space:nowrap;${bold ? 'font-weight:700;color:#9a8c66;' : ''}">${value}</td></tr>`
+  const totals = t.hasPrices
+    ? totalRow('Subtotal (D.P.)', inr(t.gross)) +
+      (t.discount > 0 ? totalRow('Discount', `− ${inr(t.discount)}`) : '') +
+      totalRow('Total (excl. GST)', inr(t.net), true) +
+      (t.unpriced ? `<tr><td colspan="6" style="padding:4px 12px;text-align:right;font-size:12px;color:#888;">${t.unpriced} item${t.unpriced === 1 ? '' : 's'} without a price not included</td></tr>` : '')
+    : ''
   const th = 'padding:10px 12px;background:#f6f4ef;text-align:left;font-size:12px;text-transform:uppercase;color:#666;'
-  return `<table style="font-family:sans-serif;font-size:14px;border-collapse:collapse;width:100%;max-width:640px;">
-    <tr><th style="${th}">#</th><th style="${th}">Product</th><th style="${th}">Configuration</th><th style="${th}text-align:right;">Qty</th></tr>
+  const thR = `${th}text-align:right;`
+  return `<table style="font-family:sans-serif;font-size:14px;border-collapse:collapse;width:100%;max-width:720px;">
+    <tr><th style="${th}">#</th><th style="${th}">Product</th><th style="${thR}">Qty</th><th style="${thR}">D.P.</th><th style="${thR}">Disc</th><th style="${thR}">Total</th></tr>
     ${rows}
+    ${totals}
   </table>`
 }
 
@@ -76,6 +121,16 @@ export async function POST(req: NextRequest) {
   const body  = await req.json().catch(() => ({}))
   const items = parseItems(body.items)
   if (!items) return NextResponse.json({ error: 'Your quote list is empty or invalid' }, { status: 400 })
+
+  // Authoritative D.P. per product from ledlum_product_prices (by model).
+  try {
+    const prices = await getPricesForModels(items.map(i => i.productCode))
+    for (const item of items) item.unitPrice = prices.get(item.productCode)?.[DP_KEY] ?? null
+  } catch (err) {
+    console.error('[quote-request] price lookup failed:', err)   // send without prices rather than fail
+  }
+  const totals = quoteTotals(items)
+
   const note     = typeof body.note === 'string' ? body.note.trim().slice(0, 2000) : ''
   const totalQty = items.reduce((s, i) => s + i.quantity, 0)
   const date     = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
@@ -94,6 +149,7 @@ export async function POST(req: NextRequest) {
         ${detailRow('Username', `@${escapeHtml(caller.username)}`)}
         ${detailRow('Date', escapeHtml(date))}
         ${detailRow('Total items', `${items.length} product${items.length !== 1 ? 's' : ''} · ${totalQty} units`)}
+        ${totals.hasPrices ? detailRow('Quote value', `${inr(totals.net)} <span style="color:#888;">(excl. GST${totals.discount > 0 ? `, after ${inr(totals.discount)} discount` : ''})</span>`) : ''}
       </table>
       ${note ? `<p style="background:#f6f4ef;border-radius:8px;padding:12px 14px;white-space:pre-wrap;"><strong>Note from partner:</strong><br/>${escapeHtml(note)}</p>` : ''}
       ${itemsTable(items)}
@@ -108,13 +164,19 @@ export async function POST(req: NextRequest) {
   })
 
   const base = { userId: caller.id, username: caller.username, role: caller.role, req }
-  const summary = items.map(i => ({ productCode: i.productCode, quantity: i.quantity, selection: i.selection }))
+  const summary = items.map(i => ({
+    productCode: i.productCode, quantity: i.quantity, selection: i.selection,
+    unitPrice: i.unitPrice, discount: i.discount || undefined,
+  }))
 
   if (salesError) {
     await logActivity({ ...base, event: 'quote_failed', details: { items: summary, totalQty, error: salesError } })
     return NextResponse.json({ error: 'Could not send your quote request. Please try again.' }, { status: 502 })
   }
-  await logActivity({ ...base, event: 'quote_sent', details: { items: summary, totalQty, note: note || undefined, to: QUOTE_TO } })
+  await logActivity({ ...base, event: 'quote_sent', details: {
+    items: summary, totalQty, note: note || undefined, to: QUOTE_TO,
+    ...(totals.hasPrices ? { subtotal: totals.gross, discount: totals.discount, total: totals.net } : {}),
+  } })
 
   // Confirmation to the partner — failure here doesn't fail the request.
   const confirmHtml = `

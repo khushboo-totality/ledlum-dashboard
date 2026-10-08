@@ -36,7 +36,7 @@ export type BoqMeta = {
   location: string;
   preparedBy: string;
   projectName: string;
-  architectContact: string;
+  architectName: string;
   architectPan: string;
   dealerName: string;
   companyAddress: string;
@@ -88,7 +88,7 @@ const QTY_COLS: BoqCol[] = [
 ];
 // Only shown once real pricing exists (hidden while every row is 0).
 const PRICE_COLS: (BoqCol & { value: (r: BoqRow) => number })[] = [
-  { id: "mrp", label: "MRP (₹)", className: "w-24 text-right", value: (r) => r.mrp, render: (r) => inr(r.mrp) },
+  { id: "mrp", label: "D.P. (₹)", className: "w-24 text-right", value: (r) => r.mrp, render: (r) => inr(r.mrp) },
   { id: "disc", label: "Disc", className: "w-16 text-right", value: (r) => r.disc, render: (r) => `${r.disc}%` },
   { id: "net", label: "Net (₹)", className: "w-24 text-right", value: (r) => r.net, render: (r) => inr(r.net) },
   { id: "total", label: "Total (₹)", className: "w-[116px] text-right font-bold", value: (r) => r.total, render: (r) => inr(r.total) },
@@ -129,7 +129,8 @@ function MetaField({ label, value }: { label: string; value: string }) {
       <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#b08d57]">
         {label}:
       </span>
-      <span className="text-[12px] font-medium uppercase tracking-wide text-white">{value}</span>
+      {/* Empty values print as blank space (to fill in by hand), not a placeholder. */}
+      <span className="min-w-[4rem] text-[12px] font-medium uppercase tracking-wide text-white">{value || " "}</span>
     </div>
   );
 }
@@ -140,7 +141,7 @@ function DetailField({ label, value }: { label: string; value: string }) {
       <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#b08d57]">
         {label}
       </div>
-      <div className="text-[13px] text-white/90">{value}</div>
+      <div className="min-h-[1.25rem] text-[13px] text-white/90">{value || " "}</div>
     </div>
   );
 }
@@ -168,7 +169,7 @@ function Masthead({ meta }: { meta: BoqMeta }) {
       <div className="grid grid-cols-5 divide-x divide-white/15 border-t border-white/15 py-[26px]">
         <DetailField label="Project Name" value={meta.projectName} />
         <DetailField label="Location" value={meta.location} />
-        <DetailField label="Architect Email & Number" value={meta.architectContact} />
+        <DetailField label="Architect Name" value={meta.architectName} />
         <DetailField label="Architect PAN" value={meta.architectPan} />
         <DetailField label="Dealer Name" value={meta.dealerName} />
       </div>
@@ -202,7 +203,7 @@ function BoqPage({
 
       <div className="px-10 py-7">
         <h1 className="text-[19px] font-bold uppercase tracking-[0.04em] text-[#b08d57]">
-          Bill of Quantities — {meta.projectName}
+          Bill of Quantities{meta.projectName ? ` — ${meta.projectName}` : ""}
         </h1>
       </div>
 
@@ -346,6 +347,8 @@ export default function BOQDocument({
   );
 }
 
+export const LEDLUM_ADDRESS = "No. 22A, 1st Floor, 7th Street, Sector 3, Ambattur, Chennai - 600098";
+
 export const SAMPLE_META: BoqMeta = {
   date: "19-06-2026",
   revisionNo: "-",
@@ -354,11 +357,21 @@ export const SAMPLE_META: BoqMeta = {
   location: "Chennai",
   preparedBy: "-",
   projectName: "R.K. Salai Experience Centre",
-  architectContact: "-",
+  architectName: "-",
   architectPan: "-",
   dealerName: "-",
-  companyAddress: "No. 22A, 1st Floor, 7th Street, Sector 3, Ambattur, Chennai - 600098",
+  companyAddress: LEDLUM_ADDRESS,
 };
+
+/** Header for a real quote: everything blank except what's passed in. */
+export function blankMeta(fields: Partial<BoqMeta>): BoqMeta {
+  return {
+    date: "", revisionNo: "", project: "", projectCode: "", location: "", preparedBy: "",
+    projectName: "", architectName: "", architectPan: "", dealerName: "",
+    companyAddress: LEDLUM_ADDRESS,
+    ...fields,
+  };
+}
 
 export const SAMPLE_TOTALS: BoqTotals = {
   basic: 284748,

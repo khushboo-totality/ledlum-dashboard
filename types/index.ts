@@ -133,6 +133,10 @@ export interface CartItem {
   productSpecs?: CartProductSpecs
   selection: CartSelection
   quantity: number
+  /** D.P. per unit (₹) when the item was added; null/undefined = price on request. */
+  unitPrice?: number | null
+  /** Discount on this line, in percent (0–100). */
+  discount?: number
   addedAt: string
 }
 

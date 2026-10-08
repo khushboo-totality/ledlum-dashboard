@@ -9,7 +9,7 @@ import { useCart } from '@/context/CartContext'
 import { useProducts } from '@/lib/useProducts'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
-import { toCartProductSpecs } from '@/lib/cartSpecs'
+import { toCartProductSpecs, productDp } from '@/lib/cartSpecs'
 import { getZonePath } from '@/lib/zones'
 import Header from '@/components/Header'
 import ZoneNav from '@/components/ZoneNav'
@@ -658,6 +658,8 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
       productSpecs:       toCartProductSpecs(product),
       selection: {},
       quantity: 1,
+      unitPrice:          productDp(product),
+      discount:           0,
     })
     toast(`${product.Codes} added to quote`, 'success')
   }, [can, addItem, browseMode, activeCollectionNode, activeCollection, subcategoryFor, activeProductType, activeZone, toast])

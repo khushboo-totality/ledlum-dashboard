@@ -72,13 +72,13 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
           )}
         </div>
 
-        {can('cart') && (
+        {/* {can('cart') && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
             <span className="translate-y-1 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-primary shadow-lg transition-transform duration-200 group-hover:translate-y-0 font-bai">
               + Add to Quote
             </span>
           </div>
-        )}
+        )} */}
       </div>
 
       <div className="px-4 pb-3 pt-3">
@@ -122,7 +122,7 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
         <div className="px-3 pb-3 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover:opacity-100" onClick={e => e.stopPropagation()}>
           <button
             onClick={e => { e.stopPropagation(); onQuickAdd() }}
-            className="w-full rounded-xl bg-primary/10 py-2 text-xs font-bold text-primary transition-all hover:bg-primary hover:text-white font-bai"
+            className="w-full rounded-xl bg-primary py-2 text-xs font-bold text-white transition-all hover:bg-primary hover:text-white/80 font-bai"
           >
             + Add to Quote
           </button>

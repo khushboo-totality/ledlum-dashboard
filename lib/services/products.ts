@@ -90,7 +90,7 @@ function parsePrice(v: unknown): number | null {
   return String(v ?? '').trim() !== '' && Number.isFinite(n) ? n : null
 }
 
-async function getPricesForModels(models: string[]): Promise<Map<string, Record<string, number>>> {
+export async function getPricesForModels(models: string[]): Promise<Map<string, Record<string, number>>> {
   const result = new Map<string, Record<string, number>>()
   const unique = Array.from(new Set(models.filter(Boolean)))
   for (const batch of chunk(unique, ID_CHUNK_SIZE)) {
