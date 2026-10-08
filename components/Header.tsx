@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
 import LedlumLogo from './LedlumLogo'
@@ -94,20 +95,29 @@ export default function Header({ productCount }: { productCount: number }) {
             </button>
           )}
 
-          <div className={`flex min-w-0 items-center gap-2 rounded-full border border-gray-mid bg-white/80 px-2.5 py-1.5 sm:px-3 ${lgHide}`}>
-            <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold font-bai ${AVATAR_STYLES[user.role] ?? 'bg-primary text-white'}`}>
-              {user.initials}
-            </div>
-            <div className="hidden sm:block">
-              <span className="block max-w-[9rem] truncate text-sm font-semibold font-bai text-foreground">{user.name}</span>
-              {user.company && (
-                <span className="block max-w-[10rem] truncate text-[10px] text-gray-dark font-pop">{user.company}</span>
-              )}
-            </div>
-            <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full uppercase font-pop ${ROLE_STYLES[user.role] ?? ROLE_STYLES.viewer}`}>
-              {user.role}
-            </span>
-          </div>
+          {/* User pill — opens My Account (guests have no account) */}
+          {(() => {
+            const pill = (
+              <>
+                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold font-bai ${AVATAR_STYLES[user.role] ?? 'bg-primary text-white'}`}>
+                  {user.initials}
+                </div>
+                <div className="hidden sm:block">
+                  <span className="block max-w-[9rem] truncate text-sm font-semibold font-bai text-foreground">{user.name}</span>
+                  {user.role === 'guest'
+                    ? user.company && <span className="block max-w-[10rem] truncate text-[10px] text-gray-dark font-pop">{user.company}</span>
+                    : <span className="block text-[10px] font-semibold text-primary font-pop">My Account</span>}
+                </div>
+                <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full uppercase font-pop ${ROLE_STYLES[user.role] ?? ROLE_STYLES.viewer}`}>
+                  {user.role}
+                </span>
+              </>
+            )
+            const cls = `flex min-w-0 items-center gap-2 rounded-full border border-gray-mid bg-white/80 px-2.5 py-1.5 sm:px-3 ${lgHide}`
+            return user.role === 'guest'
+              ? <div className={cls}>{pill}</div>
+              : <Link href="/account" title="My Account" className={`${cls} transition-colors hover:border-primary hover:bg-primary/5`}>{pill}</Link>
+          })()}
 
           <button
             onClick={logout}

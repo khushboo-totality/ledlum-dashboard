@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from '@/context/AuthContext'
+import Link from 'next/link'
 import LedlumLogo from './LedlumLogo'
 
 export type AdminSection = 'products' | 'categories' | 'zones' | 'partners'
@@ -114,13 +115,15 @@ export default function AdminShell({ section, onSection, children }: AdminShellP
       {user && (
         <div className="flex-shrink-0 border-t border-gray p-3">
           <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white font-bai">
-              {user.initials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-foreground font-bai">{user.name}</p>
-              <p className="truncate text-[10px] uppercase text-primary font-pop">{user.role}</p>
-            </div>
+            <Link href="/account" title="My Account" className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg hover:bg-primary/5">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white font-bai">
+                {user.initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground font-bai">{user.name}</p>
+                <p className="truncate text-[10px] text-primary font-pop"><span className="uppercase">{user.role}</span> · My Account</p>
+              </div>
+            </Link>
             <button
               onClick={logout}
               title="Sign out"

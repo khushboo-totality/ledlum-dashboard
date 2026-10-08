@@ -7,14 +7,11 @@ import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { useZones } from '@/context/ZonesContext'
-import { type BoqRow, type BoqMeta, blankMeta } from '@/boq/BOQDocument'
-
-/** Project details asked for before downloading the BOQ PDF (all optional). */
-interface BoqDetails { projectName: string; location: string; architectName: string; architectPan: string }
-const EMPTY_BOQ_DETAILS: BoqDetails = { projectName: '', location: '', architectName: '', architectPan: '' }
-const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/
-import { applySelection, linePricing, formatInr } from '@/lib/cartSpecs'
+import { linePricing, formatInr } from '@/lib/cartSpecs'
 import { authFetch, trackActivity } from '@/lib/supabaseClient'
+import { downloadBoq, EMPTY_BOQ_DETAILS, type BoqProjectDetails as BoqDetails } from '@/lib/boq'
+
+const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQty, updateDiscount, clearCart } = useCart()
@@ -99,46 +96,15 @@ export default function CartDrawer() {
   const handleDownloadPDF = async () => {
     if (items.length === 0 || downloadingPdf || panInvalid) return
     setBoqFormOpen(false)
-
-    // Columns come from the product table (attributes) + extra_specs keys;
-    // anything picked in the Configure tab overrides the catalog value.
-    const rows: BoqRow[] = items.map((item, i) => {
-      const p = linePricing(item)
-      return {
-        slNo: i + 1,
-        image: item.productImage,
-        attributes: applySelection(item.productSpecs?.attributes ?? { model: item.productCode }, item.selection),
-        specs: item.productSpecs?.extraSpecs ?? {},
-        qty: item.quantity,
-        unit: "NO'S",
-        // D.P. per unit, line discount %, price after discount, line total
-        // (0 for items without a price — the PDF hides price columns only if every row is 0).
-        mrp: p.unit ?? 0,
-        disc: p.disc,
-        net: p.net ?? 0,
-        total: p.total ?? 0,
-      }
-    })
-
-    // Project details come from the BOQ form; anything left empty prints as
-    // blank space (no sample/default values). Date, preparer and dealer are
-    // the real current values.
-    const meta: BoqMeta = blankMeta({
-      date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-      preparedBy: user?.name ?? '',
-      dealerName: user?.company ?? user?.name ?? '',
-      project: boqDetails.projectName.trim(),
-      projectName: boqDetails.projectName.trim(),
-      location: boqDetails.location.trim(),
-      architectName: boqDetails.architectName.trim(),
-      architectPan: boqDetails.architectPan.trim().toUpperCase(),
-    })
-
     setDownloadingPdf(true)
     try {
-      // Loaded on click — jsPDF + html2canvas are ~200 KB we don't want in the page bundle.
-      const { downloadBoqPdf } = await import('@/lib/exportBoqPdf')
-      await downloadBoqPdf(meta, rows, `LEDLUM-BOQ-${new Date().toISOString().slice(0, 10)}.pdf`)
+      // Project details from the BOQ form; empty fields print as blank space.
+      await downloadBoq({
+        lines: items,
+        details: boqDetails,
+        preparedBy: user?.name ?? '',
+        dealerName: user?.company ?? user?.name ?? '',
+      })
       trackActivity('boq_downloaded', { items: quoteSummary(), totalQty })
     } catch (err) {
       console.error('[CartDrawer] PDF export failed:', err)
@@ -159,13 +125,16 @@ export default function CartDrawer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           note,
+          project: boqDetails,   // same project details as the BOQ form — saved with the quote
           items: items.map(i => ({
-            productCode: i.productCode,
-            productName: i.productName,
-            context:     itemContext(i),
-            quantity:    i.quantity,
-            selection:   i.selection,
-            discount:    i.discount ?? 0,   // price itself is re-read on the server
+            productCode:  i.productCode,
+            productName:  i.productName,
+            productImage: i.productImage,
+            productSpecs: i.productSpecs,   // snapshot, so the BOQ can be re-downloaded from My Quotes
+            context:      itemContext(i),
+            quantity:     i.quantity,
+            selection:    i.selection,
+            discount:     i.discount ?? 0,   // price itself is re-read on the server
           })),
         }),
       })
@@ -173,9 +142,7 @@ export default function CartDrawer() {
       if (!res.ok) { toast(data.error ?? 'Could not send your quote request', 'error'); return }
       setSent(true); setNote('')
       toast(
-        data.confirmationSent
-          ? 'Quote request sent to LEDLUM — a copy has been emailed to you'
-          : 'Quote request sent to LEDLUM',
+        `Quote ${data.quoteNo ? `${data.quoteNo} ` : ''}sent to LEDLUM${data.confirmationSent ? ' — a copy has been emailed to you' : ''}. See it in My Account.`,
         'success',
       )
       setTimeout(() => setSent(false), 4000)

@@ -18,6 +18,9 @@ export interface ProfileRow {
   password_changed_at: string | null
   last_login_at: string | null
   created_by: string | null
+  phone?: string | null
+  gst_number?: string | null
+  billing_address?: string | null
 }
 
 /** Resolves the caller's profile (any signed-in staff/partner) from the `Authorization: Bearer <token>`

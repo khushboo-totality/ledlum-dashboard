@@ -4,6 +4,8 @@ import { getPermissions } from '@/lib/auth'
 import { escapeHtml, sendEmail } from '@/lib/email'
 import { logActivity } from '@/lib/activity'
 import { getPricesForModels, DP_KEY } from '@/lib/services/products'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { formatQuoteNo } from '@/lib/quotes'
 
 // Where partner quote requests go — same inbox as the LEDLUM website's quote form.
 const QUOTE_TO = process.env.QUOTE_TO_EMAIL || 'projects@ledlumlighting.com'
@@ -19,6 +21,31 @@ interface QuoteItem {
   discount: number
   /** D.P. per unit — looked up server-side from ledlum_product_prices (never trusted from the client). */
   unitPrice: number | null
+  /** Display-only snapshot for re-downloading the BOQ later. */
+  productImage?: string
+  productSpecs?: { attributes: Record<string, string>; extraSpecs: Record<string, string> }
+}
+
+/** Flat string map, capped — for the product spec snapshot. */
+function stringMap(raw: unknown, maxKeys = 80): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, maxKeys)) {
+    if (typeof v === 'string' || typeof v === 'number') out[String(k).slice(0, 100)] = String(v).slice(0, 500)
+  }
+  return out
+}
+
+const cleanText = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+
+function parseProject(raw: unknown) {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  return {
+    projectName:   cleanText(o.projectName, 200),
+    location:      cleanText(o.location, 200),
+    architectName: cleanText(o.architectName, 200),
+    architectPan:  cleanText(o.architectPan, 20).toUpperCase(),
+  }
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -54,6 +81,13 @@ function parseItems(raw: unknown): QuoteItem[] | null {
       selection,
       discount:    Number.isFinite(discount) ? Math.min(100, Math.max(0, discount)) : 0,
       unitPrice:   null, // filled from the price table below
+      productImage: typeof o.productImage === 'string' && /^https?:\/\//i.test(o.productImage) ? o.productImage.slice(0, 1000) : undefined,
+      productSpecs: o.productSpecs && typeof o.productSpecs === 'object'
+        ? {
+            attributes: stringMap((o.productSpecs as Record<string, unknown>).attributes),
+            extraSpecs: stringMap((o.productSpecs as Record<string, unknown>).extraSpecs),
+          }
+        : undefined,
     })
   }
   return items
@@ -132,17 +166,51 @@ export async function POST(req: NextRequest) {
   const totals = quoteTotals(items)
 
   const note     = typeof body.note === 'string' ? body.note.trim().slice(0, 2000) : ''
+  const project  = parseProject(body.project)
   const totalQty = items.reduce((s, i) => s + i.quantity, 0)
   const date     = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
   const who      = caller.company || caller.name
 
+  // Save the quote (for My Account → My Quotes). If the table isn't there yet
+  // (migration 007 not run), still send the request — just without a number.
+  let quoteId: number | null = null
+  {
+    const { data: saved, error: saveErr } = await supabaseAdmin.from('ledlum_quotes').insert({
+      user_id: caller.id,
+      username: caller.username,
+      partner_name: caller.name,
+      company: caller.company,
+      partner_email: caller.email,
+      note: note || null,
+      project_name: project.projectName || null,
+      location: project.location || null,
+      architect_name: project.architectName || null,
+      architect_pan: project.architectPan || null,
+      items,
+      item_count: items.length,
+      total_qty: totalQty,
+      subtotal: totals.hasPrices ? totals.gross : null,
+      discount: totals.hasPrices ? totals.discount : null,
+      total: totals.hasPrices ? totals.net : null,
+    }).select('id').single()
+    if (saveErr) console.error('[quote-request] could not save quote:', saveErr.message)
+    else quoteId = saved.id
+  }
+  const quoteNo = quoteId ? formatQuoteNo(quoteId) : null
+
   const detailRow = (label: string, value: string) =>
     `<tr><td style="padding:8px 14px;background:#f8f9fa;font-weight:600;width:130px;">${label}</td><td style="padding:8px 14px;">${value}</td></tr>`
+  const projectRows =
+    (project.projectName ? detailRow('Project', escapeHtml(project.projectName)) : '') +
+    (project.location ? detailRow('Location', escapeHtml(project.location)) : '') +
+    (project.architectName ? detailRow('Architect', escapeHtml(project.architectName)) : '') +
+    (project.architectPan ? detailRow('Architect PAN', escapeHtml(project.architectPan)) : '')
 
   const salesHtml = `
     <div style="font-family:sans-serif;color:#1a1a1a;max-width:640px;">
-      <h2>New Partner Quote Request</h2>
+      <h2>New Partner Quote Request${quoteNo ? ` · ${quoteNo}` : ''}</h2>
       <table style="font-family:sans-serif;font-size:14px;border-collapse:collapse;width:100%;margin-bottom:20px;">
+        ${quoteNo ? detailRow('Quote No', quoteNo) : ''}
         ${detailRow('Partner', escapeHtml(caller.name))}
         ${detailRow('Company', escapeHtml(caller.company || '—'))}
         ${detailRow('Email', `<a href="mailto:${escapeHtml(caller.email)}">${escapeHtml(caller.email)}</a>`)}
@@ -150,6 +218,7 @@ export async function POST(req: NextRequest) {
         ${detailRow('Date', escapeHtml(date))}
         ${detailRow('Total items', `${items.length} product${items.length !== 1 ? 's' : ''} · ${totalQty} units`)}
         ${totals.hasPrices ? detailRow('Quote value', `${inr(totals.net)} <span style="color:#888;">(excl. GST${totals.discount > 0 ? `, after ${inr(totals.discount)} discount` : ''})</span>`) : ''}
+        ${projectRows}
       </table>
       ${note ? `<p style="background:#f6f4ef;border-radius:8px;padding:12px 14px;white-space:pre-wrap;"><strong>Note from partner:</strong><br/>${escapeHtml(note)}</p>` : ''}
       ${itemsTable(items)}
@@ -158,7 +227,7 @@ export async function POST(req: NextRequest) {
 
   const salesError = await sendEmail({
     to: QUOTE_TO,
-    subject: `Quote Request — ${who} — ${items.length} product${items.length !== 1 ? 's' : ''}`,
+    subject: `Quote Request${quoteNo ? ` ${quoteNo}` : ''} — ${who}${project.projectName ? ` — ${project.projectName}` : ''} — ${items.length} product${items.length !== 1 ? 's' : ''}`,
     html: salesHtml,
     replyTo: caller.email,
   })
@@ -170,10 +239,14 @@ export async function POST(req: NextRequest) {
   }))
 
   if (salesError) {
+    // Not delivered — drop the saved quote so a retry doesn't leave a duplicate.
+    if (quoteId) await supabaseAdmin.from('ledlum_quotes').delete().eq('id', quoteId)
     await logActivity({ ...base, event: 'quote_failed', details: { items: summary, totalQty, error: salesError } })
     return NextResponse.json({ error: 'Could not send your quote request. Please try again.' }, { status: 502 })
   }
+  if (quoteId) await supabaseAdmin.from('ledlum_quotes').update({ email_sent: true }).eq('id', quoteId)
   await logActivity({ ...base, event: 'quote_sent', details: {
+    quoteNo: quoteNo ?? undefined, project: project.projectName || undefined,
     items: summary, totalQty, note: note || undefined, to: QUOTE_TO,
     ...(totals.hasPrices ? { subtotal: totals.gross, discount: totals.discount, total: totals.net } : {}),
   } })
@@ -181,20 +254,20 @@ export async function POST(req: NextRequest) {
   // Confirmation to the partner — failure here doesn't fail the request.
   const confirmHtml = `
     <div style="font-family:sans-serif;color:#1a1a1a;max-width:640px;">
-      <h2>We've received your quote request</h2>
+      <h2>We've received your quote request${quoteNo ? ` · ${quoteNo}` : ''}</h2>
       <p>Hi ${escapeHtml(caller.name)},</p>
-      <p>Thanks — your request for ${items.length} product${items.length !== 1 ? 's' : ''} has been sent to the LEDLUM team. We'll get back to you with pricing shortly.</p>
+      <p>Thanks — your request for ${items.length} product${items.length !== 1 ? 's' : ''}${project.projectName ? ` for <strong>${escapeHtml(project.projectName)}</strong>` : ''} has been sent to the LEDLUM team. We'll get back to you shortly.${quoteNo ? ' You can see it any time under <strong>My Account → My Quotes</strong>.' : ''}</p>
       ${note ? `<p style="background:#f6f4ef;border-radius:8px;padding:12px 14px;white-space:pre-wrap;"><strong>Your note:</strong><br/>${escapeHtml(note)}</p>` : ''}
       ${itemsTable(items)}
       <p style="font-size:13px;color:#666;margin-top:20px;">Sent ${escapeHtml(date)}.</p>
     </div>`
   const confirmError = await sendEmail({
     to: caller.email,
-    subject: 'Your LEDLUM quote request',
+    subject: `Your LEDLUM quote request${quoteNo ? ` ${quoteNo}` : ''}`,
     html: confirmHtml,
     replyTo: QUOTE_TO,
   })
   if (confirmError) console.error('[quote-request] confirmation email failed:', confirmError)
 
-  return NextResponse.json({ ok: true, confirmationSent: !confirmError })
+  return NextResponse.json({ ok: true, confirmationSent: !confirmError, quoteId, quoteNo })
 }
