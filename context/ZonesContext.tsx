@@ -8,6 +8,8 @@ interface ZonesContextType {
   loading: boolean
   getZoneById: (id: string) => Zone | undefined
   getZoneByPath: (path: string) => Zone | undefined
+  /** Re-fetch zones (e.g. after the admin adds/renames one). */
+  refreshZones: () => Promise<void>
 }
 
 const ZonesContext = createContext<ZonesContextType | null>(null)
@@ -26,6 +28,14 @@ export function ZonesProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true }
   }, [])
 
+  const refreshZones = useCallback(async () => {
+    try {
+      const res  = await fetch('/api/zones', { cache: 'no-store' })
+      const data = res.ok ? await res.json() : null
+      if (Array.isArray(data)) setZones(data)
+    } catch {}
+  }, [])
+
   const getZoneById = useCallback((id: string) => zones.find(z => z.id === id), [zones])
 
   // "zone-a" -> "a" style URL segment lookup, mirrors the old getZonePath/getZoneByPath pairing
@@ -34,7 +44,7 @@ export function ZonesProvider({ children }: { children: ReactNode }) {
   }, [zones])
 
   return (
-    <ZonesContext.Provider value={{ zones, loading, getZoneById, getZoneByPath }}>
+    <ZonesContext.Provider value={{ zones, loading, getZoneById, getZoneByPath, refreshZones }}>
       {children}
     </ZonesContext.Provider>
   )

@@ -8,6 +8,7 @@ import PageSpinner from '@/components/PageSpinner'
 import AdminShell, { AdminMenuButton, type AdminSection } from '@/components/AdminShell'
 import PartnerManager from '@/components/PartnerManager'
 import CategoryManager from '@/components/CategoryManager'
+import ZoneManager from '@/components/ZoneManager'
 
 function PageInner() {
   const { user, loading: authLoading } = useAuth()
@@ -35,7 +36,7 @@ function PageInner() {
   // Coming back from Categories, remount the catalogue so renamed/new
   // categories show up in its filters.
   const changeSection = (next: AdminSection) => {
-    if (section === 'categories' && next !== 'categories') setCatalogKey(k => k + 1)
+    if ((section === 'categories' || section === 'zones') && next !== section) setCatalogKey(k => k + 1)
     setSection(next)
   }
 
@@ -57,6 +58,23 @@ function PageInner() {
           <main className="px-4 py-6 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl">
               <CategoryManager />
+            </div>
+          </main>
+        </div>
+      )}
+
+      {section === 'zones' && (
+        <div className="min-h-screen app-shell">
+          <header className="glass-panel sticky top-0 z-40 flex min-h-16 items-center gap-3 border-b border-white/80 px-4 py-3 shadow-header sm:px-6 lg:px-8">
+            <AdminMenuButton />
+            <div>
+              <p className="text-sm font-extrabold text-foreground font-bai">Zones</p>
+              <p className="text-[11px] font-pop text-gray-dark">Add, rename and order project zones</p>
+            </div>
+          </header>
+          <main className="px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-3xl">
+              <ZoneManager />
             </div>
           </main>
         </div>
