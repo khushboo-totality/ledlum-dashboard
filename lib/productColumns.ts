@@ -6,6 +6,7 @@
 // expanded into one column per key instead, id is internal.
 export const EXCLUDED_COLUMNS = new Set([
   'id',
+  'category_id', // FK to ledlum_categories — its name is already in group_name
   'family',
   'group_name',
   'hero_description',

@@ -39,6 +39,8 @@ export interface Product {
   model?: string
   family?: string | null
   group_name?: string
+  /** FK to ledlum_categories; group_name is the synced name. */
+  category_id?: number | null
   collection?: string
   hero_image?: string | null
   hero_description?: string | null
@@ -136,6 +138,8 @@ export interface CartItem {
 export interface ProductFormData {
   Codes: string
   Category: string
+  /** Selected ledlum_categories row; null clears it. */
+  category_id?: number | null
   ImageLink: string
   zone?: string
   zones?: string[]

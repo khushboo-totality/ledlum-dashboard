@@ -588,7 +588,8 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const handleSubmit = useCallback(async (data: ProductFormData) => {
     try {
       if (modalMode === 'create') {
-        await createProduct({ ...data, zone: activeZone || 'zone-a' })
+        // Zones come from the form's Zone dropdown (optional) — no silent default.
+        await createProduct({ ...data, zone: activeZone || undefined })
         toast('Product created', 'success')
       } else if (modalMode === 'edit' && editingProduct) {
         await updateProduct(editingProduct.id, data)

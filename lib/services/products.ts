@@ -25,7 +25,7 @@ const AGGREGATE_CACHE_TTL_MS = 60_000
 const taxonomyCache: { data: CollectionNode[] | null; expires: number } = { data: null, expires: 0 }
 const categoriesCache = new Map<string, { data: string[]; expires: number }>()
 
-function invalidateAggregateCaches(): void {
+export function invalidateAggregateCaches(): void {
   taxonomyCache.data = null
   taxonomyCache.expires = 0
   categoriesCache.clear()
@@ -59,6 +59,7 @@ interface ProductRow {
   family: string | null
   category: string | null
   group_name: string | null
+  category_id: number | null
   collection: string | null
   hero_image: string | null
   hero_description: string | null
@@ -106,6 +107,7 @@ function mapRowToProduct(row: ProductRow, zoneSlugs: string[]): Product {
     model: row.model ?? undefined,
     family: row.family,
     group_name: row.group_name ?? undefined,
+    category_id: row.category_id ?? null,
     collection: row.collection ?? undefined,
     hero_image: row.hero_image,
     hero_description: row.hero_description,
@@ -341,6 +343,9 @@ export async function getProductById(id: string): Promise<Product | null> {
 function formToInsertRow(data: Partial<ProductFormData>) {
   return {
     model: data.Codes,
+    // When category_id is set, a DB trigger overwrites group_name with the
+    // category's current name (see migrations/005_create_categories.sql).
+    category_id: data.category_id ?? null,
     group_name: data.Category || 'Uncategorized',
     hero_image: data.ImageLink || null,
     family: data.family || null,
@@ -385,6 +390,7 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
   const updateRow: Record<string, unknown> = {}
   if (data.Codes !== undefined) updateRow.model = data.Codes
   if (data.Category !== undefined) updateRow.group_name = data.Category || 'Uncategorized'
+  if (data.category_id !== undefined) updateRow.category_id = data.category_id
   if (data.ImageLink !== undefined) updateRow.hero_image = data.ImageLink || null
   if (data.family !== undefined) updateRow.family = data.family || null
   if (data.collection !== undefined) updateRow.collection = data.collection || null
