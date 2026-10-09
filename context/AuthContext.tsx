@@ -16,6 +16,8 @@ interface AuthContextType {
   /** Adopts session tokens issued by a server route (login / set-password).
    * Resolves to an error message, or null on success. */
   adoptSession: (tokens: { access_token: string; refresh_token: string }) => Promise<string | null>
+  /** Re-load the signed-in user's profile (e.g. after editing their name). */
+  refreshUser: () => Promise<void>
   can: (action: keyof Permissions) => boolean
 }
 
@@ -132,10 +134,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.signOut()
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    const { data } = await supabase.auth.getSession()
+    if (!data.session) return
+    const profile = await loadProfile(data.session.user.id)
+    if (profile) setUser(profile)
+  }, [])
+
   const can = useCallback((action: keyof Permissions) => permissions[action], [permissions])
 
   return (
-    <AuthContext.Provider value={{ user, loading, permissions, login, loginAsGuest, logout, adoptSession, can }}>
+    <AuthContext.Provider value={{ user, loading, permissions, login, loginAsGuest, logout, adoptSession, refreshUser, can }}>
       {children}
     </AuthContext.Provider>
   )

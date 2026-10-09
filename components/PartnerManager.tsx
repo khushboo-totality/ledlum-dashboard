@@ -55,6 +55,8 @@ const EVENT_LABELS: Record<string, string> = {
   quote_item_removed:      'Removed from quote',
   quote_sent:              'Sent quote request',
   quote_failed:            'Quote request failed to send',
+  profile_updated:         'Updated profile',
+  settings_updated:        'Changed settings',
   quote_copied:            'Copied quote',
   boq_downloaded:          'Downloaded BOQ PDF',
 }

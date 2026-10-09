@@ -15,6 +15,8 @@ export type ActivityEvent =
   | 'quote_copied' | 'boq_downloaded'
   // written by /api/quote-request
   | 'quote_sent' | 'quote_failed'
+  // admin
+  | 'settings_updated' | 'profile_updated'
 
 /** Events the browser is allowed to report via POST /api/activity. */
 export const CLIENT_EVENTS: ActivityEvent[] = [

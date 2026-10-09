@@ -6,9 +6,10 @@ import { logActivity } from '@/lib/activity'
 import { getPricesForModels, DP_KEY } from '@/lib/services/products'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { formatQuoteNo } from '@/lib/quotes'
+import { getQuoteRecipients } from '@/lib/services/settings'
 
-// Where partner quote requests go — same inbox as the LEDLUM website's quote form.
-const QUOTE_TO = process.env.QUOTE_TO_EMAIL || 'projects@ledlumlighting.com'
+// Where partner quote requests go is an admin setting (Admin → Settings →
+// Quote recipients); defaults to projects@ledlumlighting.com.
 const MAX_ITEMS = 200
 
 interface QuoteItem {
@@ -164,6 +165,7 @@ export async function POST(req: NextRequest) {
     console.error('[quote-request] price lookup failed:', err)   // send without prices rather than fail
   }
   const totals = quoteTotals(items)
+  const recipients = await getQuoteRecipients()
 
   const note     = typeof body.note === 'string' ? body.note.trim().slice(0, 2000) : ''
   const project  = parseProject(body.project)
@@ -226,7 +228,7 @@ export async function POST(req: NextRequest) {
     </div>`
 
   const salesError = await sendEmail({
-    to: QUOTE_TO,
+    to: recipients,
     subject: `Quote Request${quoteNo ? ` ${quoteNo}` : ''} — ${who}${project.projectName ? ` — ${project.projectName}` : ''} — ${items.length} product${items.length !== 1 ? 's' : ''}`,
     html: salesHtml,
     replyTo: caller.email,
@@ -247,7 +249,7 @@ export async function POST(req: NextRequest) {
   if (quoteId) await supabaseAdmin.from('ledlum_quotes').update({ email_sent: true }).eq('id', quoteId)
   await logActivity({ ...base, event: 'quote_sent', details: {
     quoteNo: quoteNo ?? undefined, project: project.projectName || undefined,
-    items: summary, totalQty, note: note || undefined, to: QUOTE_TO,
+    items: summary, totalQty, note: note || undefined, to: recipients.join(', '),
     ...(totals.hasPrices ? { subtotal: totals.gross, discount: totals.discount, total: totals.net } : {}),
   } })
 
@@ -265,7 +267,7 @@ export async function POST(req: NextRequest) {
     to: caller.email,
     subject: `Your LEDLUM quote request${quoteNo ? ` ${quoteNo}` : ''}`,
     html: confirmHtml,
-    replyTo: QUOTE_TO,
+    replyTo: recipients[0],
   })
   if (confirmError) console.error('[quote-request] confirmation email failed:', confirmError)
 

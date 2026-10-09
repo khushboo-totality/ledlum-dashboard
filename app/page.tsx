@@ -9,6 +9,7 @@ import AdminShell, { AdminMenuButton, type AdminSection } from '@/components/Adm
 import PartnerManager from '@/components/PartnerManager'
 import CategoryManager from '@/components/CategoryManager'
 import ZoneManager from '@/components/ZoneManager'
+import AdminSettings from '@/components/AdminSettings'
 
 function PageInner() {
   const { user, loading: authLoading } = useAuth()
@@ -75,6 +76,23 @@ function PageInner() {
           <main className="px-4 py-6 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl">
               <ZoneManager />
+            </div>
+          </main>
+        </div>
+      )}
+
+      {section === 'settings' && (
+        <div className="min-h-screen app-shell">
+          <header className="glass-panel sticky top-0 z-40 flex min-h-16 items-center gap-3 border-b border-white/80 px-4 py-3 shadow-header sm:px-6 lg:px-8">
+            <AdminMenuButton />
+            <div>
+              <p className="text-sm font-extrabold text-foreground font-bai">Settings</p>
+              <p className="text-[11px] font-pop text-gray-dark">Your profile and where quote requests are sent</p>
+            </div>
+          </header>
+          <main className="px-4 py-6 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-3xl">
+              <AdminSettings />
             </div>
           </main>
         </div>
