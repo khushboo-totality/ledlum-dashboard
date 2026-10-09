@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { logActivity } from '@/lib/activity'
+import { authEmailFor } from '@/lib/serverAuth'
 
 // Username-or-email sign-in. Resolving username -> email happens here on the
 // server so users' emails are never exposed to the browser; the resulting
@@ -22,12 +23,20 @@ export async function POST(req: NextRequest) {
   const invalid = () => NextResponse.json({ error: 'Invalid username or password.' }, { status: 401 })
   if (!profile) return invalid()
 
+  // Sign in with the email Supabase Auth actually has for this account (by id),
+  // not the profile's copy — if someone edits ledlum_profiles.email directly
+  // the two can drift apart, which would otherwise make sign-in fail.
+  const signInEmail = await authEmailFor(profile.id, profile.email)
+  if (signInEmail.toLowerCase() !== profile.email.toLowerCase()) {
+    console.warn(`[login] profile email (${profile.email}) differs from auth email for @${profile.username}`)
+  }
+
   const anon = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { persistSession: false } },
   )
-  const { data, error } = await anon.auth.signInWithPassword({ email: profile.email, password })
+  const { data, error } = await anon.auth.signInWithPassword({ email: signInEmail, password })
   if (error || !data.session) {
     await logActivity({
       userId: profile.id, username: profile.username, role: profile.role,

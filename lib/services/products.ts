@@ -29,6 +29,8 @@ export function invalidateAggregateCaches(): void {
   taxonomyCache.data = null
   taxonomyCache.expires = 0
   categoriesCache.clear()
+  familiesCache.data = null
+  familiesCache.expires = 0
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -553,6 +555,28 @@ export async function getCategories(zone?: string): Promise<string[]> {
 
   const result = Array.from(cats)
   categoriesCache.set(cacheKey, { data: result, expires: Date.now() + AGGREGATE_CACHE_TTL_MS })
+  return result
+}
+
+// ── Families (ledlum_products.family — free text grouping variants) ──
+export interface FamilyOption { name: string; count: number }
+const familiesCache: { data: FamilyOption[] | null; expires: number } = { data: null, expires: 0 }
+
+/** Every distinct family with its product count, A→Z (natural order). */
+export async function listFamilies(): Promise<FamilyOption[]> {
+  if (familiesCache.data && familiesCache.expires > Date.now()) return familiesCache.data
+  const rows = await selectAllPages<{ family: string | null }>((from, to) =>
+    supabaseAdmin.from(TABLE).select('family').order('id').range(from, to)
+  )
+  const counts = new Map<string, number>()
+  for (const r of rows) {
+    const f = r.family?.trim()
+    if (f) counts.set(f, (counts.get(f) ?? 0) + 1)
+  }
+  const result = Array.from(counts, ([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+  familiesCache.data = result
+  familiesCache.expires = Date.now() + AGGREGATE_CACHE_TTL_MS
   return result
 }
 

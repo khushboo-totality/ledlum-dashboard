@@ -6,6 +6,7 @@ import { useZones } from '@/context/ZonesContext'
 import { useAuth } from '@/context/AuthContext'
 import { authFetch } from '@/lib/supabaseClient'
 import { uploadProductImage } from '@/lib/uploadImage'
+import FamilyPicker, { type FamilyOption } from './FamilyPicker'
 import { getImageUrl } from '@/lib/auth'
 
 interface CategoryOption { id: number; name: string; collection: string | null; productCount: number }
@@ -79,6 +80,8 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
 
   // Real-schema specification fields (all optional)
   const [family, setFamily]                 = useState('')
+  const [families, setFamilies]             = useState<FamilyOption[]>([])
+  const [familiesLoading, setFamiliesLoading] = useState(false)
   const [productType, setProductType]       = useState('')
   const [heroDescription, setHeroDescription] = useState('')
   const [galleryImages, setGalleryImages]   = useState<ImageItem[]>([])
@@ -133,6 +136,13 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
       })
       .catch(() => { if (!cancelled) setCategoryError('Could not load categories') })
       .finally(() => { if (!cancelled) setCategoriesLoading(false) })
+
+    setFamiliesLoading(true)
+    fetch('/api/product-families')
+      .then(res => res.json())
+      .then((data: FamilyOption[]) => { if (!cancelled && Array.isArray(data)) setFamilies(data) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setFamiliesLoading(false) })
 
     fetch('/api/product-taxonomy')
       .then(res => res.json())
@@ -786,6 +796,22 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
                 {categoryId === NEW_CATEGORY && newCategoryBox}
                 {categoryError && <p className="text-xs text-red-500 font-pop">{categoryError}</p>}
 
+                {/* Family — searchable dropdown of all existing families */}
+                <div>
+                  <label className={labelCls}>Family</label>
+                  <FamilyPicker
+                    value={family}
+                    onChange={setFamily}
+                    families={families}
+                    loading={familiesLoading}
+                    modelCode={codes.trim() || undefined}
+                    className={inputCls}
+                  />
+                  <p className="mt-1 text-[11px] text-gray-dark font-pop">
+                    Products with the same family are variants of each other.
+                  </p>
+                </div>
+
                 {/* Zones — multi-select dropdown */}
                 <div ref={zonesRef} className="relative">
                   <label className={labelCls}>Zone</label>
@@ -957,8 +983,6 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
 
                   {specsOpen && (
                     <div className="mt-3 grid grid-cols-2 gap-3">
-                      <div><label className={specLabelCls}>Family</label>
-                        <input type="text" value={family} onChange={e => setFamily(e.target.value)} className={specInputCls} /></div>
                       <div><label className={specLabelCls}>Product Type</label>
                         <input type="text" value={productType} onChange={e => setProductType(e.target.value)} className={specInputCls} /></div>
                       <div><label className={specLabelCls}>Watts</label>

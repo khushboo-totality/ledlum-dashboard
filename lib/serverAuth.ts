@@ -43,6 +43,13 @@ export async function requireAdmin(req: NextRequest): Promise<ProfileRow | NextR
   return caller
 }
 
+/** The email Supabase Auth has for an account — what sign-in must use.
+ * ledlum_profiles.email is a copy that can drift if edited directly. */
+export async function authEmailFor(userId: string, fallback: string): Promise<string> {
+  const { data } = await supabaseAdmin.auth.admin.getUserById(userId)
+  return data?.user?.email ?? fallback
+}
+
 export function makeInitials(name: string): string {
   return name.split(/\s+/).filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2)
 }

@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { readActionToken } from '@/lib/actionTokens'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '@/lib/password'
 import { logActivity } from '@/lib/activity'
+import { authEmailFor } from '@/lib/serverAuth'
 
 const INVALID = 'This link is invalid, expired or has already been used'
 
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { persistSession: false } },
   )
-  const { data } = await anon.auth.signInWithPassword({ email: user.email, password })
+  const { data } = await anon.auth.signInWithPassword({ email: await authEmailFor(user.id, user.email), password })
   if (!data.session) return NextResponse.json({ ok: true }) // password saved; they can sign in manually
   await logActivity({ ...base, event: 'login' })
 

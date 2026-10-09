@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { getCaller } from '@/lib/serverAuth'
+import { getCaller, authEmailFor } from '@/lib/serverAuth'
 import { hashPassword, MIN_PASSWORD_LENGTH } from '@/lib/password'
 import { logActivity } from '@/lib/activity'
 
@@ -27,7 +27,9 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { persistSession: false } },
   )
-  const { error: signInErr } = await anon.auth.signInWithPassword({ email: caller.email, password: currentPassword })
+  const { error: signInErr } = await anon.auth.signInWithPassword({
+    email: await authEmailFor(caller.id, caller.email), password: currentPassword,
+  })
   if (signInErr) return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 })
 
   const { error } = await supabaseAdmin.auth.admin.updateUserById(caller.id, { password: newPassword })
