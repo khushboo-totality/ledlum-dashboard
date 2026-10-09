@@ -16,7 +16,7 @@ import ProductDatasheet, {
 import { skipImageOptimization } from '@/lib/auth'
 
 const CAPTURE_SCALE = 2
-const BOQ_IMAGE_BOX = 80 // matches the h-20 w-20 image cell in BOQDocument
+const BOQ_IMAGE_BOX = 48 // matches the h-12 w-12 image cell in BOQDocument's schedule
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -130,6 +130,56 @@ function prepareLogoForDarkHeader(): Promise<string | undefined> {
   return logoPromise
 }
 
+let logoLightPromise: Promise<string | undefined> | null = null
+
+/**
+ * The brand logo for white pages: cropped to its visible content with the
+ * white background made transparent; the black wordmark and orange mark keep
+ * their colours. Cached after the first export.
+ */
+function prepareLogoForLightHeader(): Promise<string | undefined> {
+  logoLightPromise ??= (async () => {
+    try {
+      const img = await loadImage(LOGO_URL)
+      const w = img.naturalWidth
+      const h = img.naturalHeight
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return undefined
+      ctx.drawImage(img, 0, 0)
+      const data = ctx.getImageData(0, 0, w, h)
+      const px = data.data
+      let minX = w, minY = h, maxX = -1, maxY = -1
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4
+          const r = px[i], g = px[i + 1], b = px[i + 2]
+          // Near-white background → transparent; everything else is content.
+          if (r > 245 && g > 245 && b > 245) px[i + 3] = 0
+          if (px[i + 3] < 16) continue
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+      }
+      if (maxX < 0) return undefined
+      ctx.putImageData(data, 0, 0)
+      const cropped = document.createElement('canvas')
+      cropped.width = maxX - minX + 1
+      cropped.height = maxY - minY + 1
+      cropped.getContext('2d')?.drawImage(canvas, minX, minY, cropped.width, cropped.height, 0, 0, cropped.width, cropped.height)
+      return cropped.toDataURL('image/png')
+    } catch {
+      logoLightPromise = null
+      return undefined
+    }
+  })()
+  return logoLightPromise
+}
+
 async function renderToPdf(element: ReactElement, filename: string): Promise<void> {
   const container = document.createElement('div')
   container.style.position = 'fixed'
@@ -187,11 +237,15 @@ export async function downloadBoqPdf(
   totals?: BoqTotals
 ): Promise<void> {
   const logo = prepareLogoForDarkHeader()
+  const logoLight = prepareLogoForLightHeader()
   const preparedRows = await Promise.all(rows.map(async r => ({
     ...r,
     image: await prepareImageForPdf(r.image, BOQ_IMAGE_BOX, BOQ_IMAGE_BOX),
   })))
-  await renderToPdf(<BOQDocument meta={{ ...meta, logo: await logo }} rows={preparedRows} totals={totals} />, filename)
+  await renderToPdf(
+    <BOQDocument meta={{ ...meta, logo: await logo, logoLight: await logoLight }} rows={preparedRows} totals={totals} />,
+    filename,
+  )
 }
 
 /** Single-product data sheet: hero image, gallery, description + full spec list. */
