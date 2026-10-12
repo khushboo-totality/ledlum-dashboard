@@ -19,10 +19,10 @@ const hashPassword = (pw) => {
   return `scrypt$${salt}$${scryptSync(pw, salt, 64).toString('hex')}`
 }
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+const url = process.env.SUPABASE_URL
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!url || !key) {
-  console.error('Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars.')
+  console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars.')
   process.exit(1)
 }
 

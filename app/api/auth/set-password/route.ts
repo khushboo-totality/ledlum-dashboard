@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
 
   // Sign them straight in.
   const anon = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY!,
     { auth: { persistSession: false } },
   )
   const { data } = await anon.auth.signInWithPassword({ email: await authEmailFor(user.id, user.email), password })
