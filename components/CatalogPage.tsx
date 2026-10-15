@@ -362,9 +362,16 @@ interface CatalogPageProps {
   onModeChange?: (m: BrowseMode) => void
   zoneId?: string
   initialProductId?: string
+  /** Set by the admin sidebar's "Add Product": open the create modal, then
+   * call onAddProductHandled so it doesn't reopen on the next render/remount. */
+  addProductRequested?: boolean
+  onAddProductHandled?: () => void
 }
 
-export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId: zoneIdProp, initialProductId }: CatalogPageProps) {
+export default function CatalogPage({
+  initialMode = 'zone', onModeChange, zoneId: zoneIdProp, initialProductId,
+  addProductRequested, onAddProductHandled,
+}: CatalogPageProps) {
   const { can, user }  = useAuth()
   const { toast }      = useToast()
   const { addItem }    = useCart()
@@ -492,6 +499,7 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const {
     products: ptProducts, loading: ptLoading, loadingMore: ptLoadingMore,
     hasMore: ptHasMore, loadMore: ptLoadMore, fetchProducts: fetchPtProducts,
+    createProduct: ptCreateProduct, updateProduct: ptUpdateProduct, deleteProduct: ptDeleteProduct,
   } = useProducts(undefined, { skipCategories: true })
 
   useEffect(() => {
@@ -515,6 +523,12 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [modalMode, setModalMode]             = useState<'create' | 'edit' | null>(null)
   const [editingProduct, setEditingProduct]   = useState<Product | null>(null)
+
+  useEffect(() => {
+    if (!addProductRequested) return
+    setEditingProduct(null); setModalMode('create')
+    onAddProductHandled?.()
+  }, [addProductRequested, onAddProductHandled])
 
   useEffect(() => {
     if (!initialProductId || products.length === 0) return
@@ -612,25 +626,33 @@ export default function CatalogPage({ initialMode = 'zone', onModeChange, zoneId
   const handleDelete = useCallback(async (product: Product) => {
     if (!can('delete')) { toast('Permission denied', 'error'); return }
     if (!confirm(`Delete "${product.Codes}"? This cannot be undone.`)) return
-    try   { await deleteProduct(product.id); toast('Product deleted', 'success') }
+    try {
+      // Each mode has its own product list — update the one on screen.
+      await (browseMode === 'product' ? ptDeleteProduct : deleteProduct)(product.id)
+      setSelectedProduct(prev => (prev?.id === product.id ? null : prev))
+      toast('Product deleted', 'success')
+    }
     catch { toast('Failed to delete', 'error') }
-  }, [can, deleteProduct, toast])
+  }, [can, browseMode, deleteProduct, ptDeleteProduct, toast])
 
   const handleSubmit = useCallback(async (data: ProductFormData) => {
+    const productMode = browseMode === 'product'
     try {
       if (modalMode === 'create') {
         // Zones come from the form's Zone dropdown (optional) — no silent default.
-        await createProduct({ ...data, zone: activeZone || undefined })
+        await (productMode ? ptCreateProduct : createProduct)({ ...data, zone: activeZone || undefined })
         toast('Product created', 'success')
       } else if (modalMode === 'edit' && editingProduct) {
-        await updateProduct(editingProduct.id, data)
+        const updated = await (productMode ? ptUpdateProduct : updateProduct)(editingProduct.id, data)
+        // Refresh the open detail panel so new specs/images show right away.
+        setSelectedProduct(prev => (prev?.id === updated.id ? updated : prev))
         toast('Product updated', 'success')
       }
     } catch (e: unknown) {
       toast(e instanceof Error ? e.message : 'Operation failed', 'error')
       throw e
     }
-  }, [modalMode, editingProduct, createProduct, updateProduct, toast, activeZone])
+  }, [modalMode, editingProduct, browseMode, createProduct, updateProduct, ptCreateProduct, ptUpdateProduct, toast, activeZone])
 
   const activeCollectionNode = useMemo(
     () => taxonomy.find(c => c.name === activeCollection) ?? null,

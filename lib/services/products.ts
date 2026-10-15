@@ -404,6 +404,19 @@ export async function getProductById(id: string): Promise<Product | null> {
   return mapRowToProduct(row, zoneMap.get(numId) ?? [], priceMap.get(row.model ?? ''))
 }
 
+/** Client extra_specs → trimmed { label: value } with blanks dropped, capped;
+ * null when nothing is left (so the column stays empty, not {}). */
+function cleanExtraSpecs(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 100)) {
+    const key = String(k).trim().slice(0, 100)
+    const value = typeof v === 'string' || typeof v === 'number' ? String(v).trim().slice(0, 500) : ''
+    if (key && value) out[key] = value
+  }
+  return Object.keys(out).length ? out : null
+}
+
 function formToInsertRow(data: Partial<ProductFormData>) {
   return {
     model: data.Codes,
@@ -428,6 +441,7 @@ function formToInsertRow(data: Partial<ProductFormData>) {
     cri: data.cri || null,
     website: data.website || null,
     product_type: data.product_type || null,
+    extra_specs: cleanExtraSpecs(data.extra_specs),
   }
 }
 
@@ -476,6 +490,7 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
   if (data.cri !== undefined) updateRow.cri = data.cri || null
   if (data.website !== undefined) updateRow.website = data.website || null
   if (data.product_type !== undefined) updateRow.product_type = data.product_type || null
+  if (data.extra_specs !== undefined) updateRow.extra_specs = cleanExtraSpecs(data.extra_specs)
 
   // Prices are keyed by model — remember the old one in case it's being renamed.
   let oldModel: string | null = null

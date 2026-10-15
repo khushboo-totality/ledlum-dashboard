@@ -46,6 +46,19 @@ interface ImageItem {
   preview: string   // what to show in the thumbnail
 }
 let itemSeq = 0
+
+/** One "More specifications" row. While `editing`, it shows inputs with
+ * Add (✓) / Close (✕); `original` is what Close restores (none = new row,
+ * so Close removes it). */
+interface SpecRow {
+  id: string
+  key: string
+  value: string
+  editing: boolean
+  original?: { key: string; value: string }
+}
+const specRow = (key = '', value = '', editing = false): SpecRow => ({ id: `s${++itemSeq}`, key, value, editing })
+
 const urlItem = (url: string): ImageItem => ({ id: `u${++itemSeq}`, url, preview: previewSrc(url) ?? url })
 
 export default function CrudModal({ mode, product, onSubmit, onClose, currentZone }: CrudModalProps) {
@@ -106,6 +119,9 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
   const [cri, setCri]                       = useState('')
   const [website, setWebsite]               = useState('')
   const [dp, setDp]                         = useState('')   // D.P. (dealer price), rupees
+  // Any other specs (extra_specs) — free label/value rows, shown on the
+  // product page and as BOQ columns.
+  const [extraSpecs, setExtraSpecs]         = useState<SpecRow[]>([])
 
   const [loading, setLoading] = useState(false)
   const isOpen = mode !== null
@@ -182,7 +198,9 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
       setCri(product.cri ?? '')
       setWebsite(product.website ?? '')
       setDp(product.prices?.['D.P.'] != null ? String(product.prices['D.P.']) : '')
-      setSpecsOpen(false)
+      const extras = Object.entries(product.extra_specs ?? {}).map(([k, v]) => specRow(k, String(v ?? '')))
+      setExtraSpecs(extras)
+      setSpecsOpen(extras.length > 0)
       setStep('details')
     } else if (mode === 'create') {
       setCodes(''); setHero(null)
@@ -190,6 +208,7 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
       setHeroDescription(''); setGalleryImages([]); setWatts(''); setDimensions('')
       setCutoutSize(''); setBodyColors(''); setCct(''); setBeamAngle('')
       setIpRating(''); setLedChip(''); setLuminous(''); setCri(''); setWebsite(''); setDp('')
+      setExtraSpecs([])
       setSpecsOpen(false)
       setSelectedZones(currentZone ? [currentZone] : [])
       setStep('main')
@@ -326,6 +345,21 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
     return () => document.removeEventListener('mousedown', onDown)
   }, [zonesOpen])
 
+  // ── More specifications rows ──
+  const updateSpec = (id: string, patch: Partial<SpecRow>) =>
+    setExtraSpecs(prev => prev.map(s => (s.id === id ? { ...s, ...patch } : s)))
+  const addSpecRow = () => setExtraSpecs(prev => [...prev, specRow('', '', true)])
+  const confirmSpec = (row: SpecRow) => {
+    if (!row.key.trim() || !row.value.trim()) return
+    updateSpec(row.id, { key: row.key.trim(), value: row.value.trim(), editing: false, original: undefined })
+  }
+  const cancelSpec = (row: SpecRow) => {
+    if (row.original) updateSpec(row.id, { ...row.original, editing: false, original: undefined })
+    else setExtraSpecs(prev => prev.filter(s => s.id !== row.id))
+  }
+  const editSpec = (row: SpecRow) => updateSpec(row.id, { editing: true, original: { key: row.key, value: row.value } })
+  const removeSpec = (id: string) => setExtraSpecs(prev => prev.filter(s => s.id !== id))
+
   const toggleZone = (id: string) => {
     setSelectedZones(prev => prev.includes(id) ? prev.filter(z => z !== id) : [...prev, id])
   }
@@ -427,6 +461,18 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
         luminous: luminous.trim() || undefined,
         cri: cri.trim() || undefined,
         website: website.trim() || undefined,
+        // Added rows, plus any still open with both fields filled (so Save
+        // doesn't drop one the user forgot to ✓). Blank rows are skipped;
+        // an open edit of an existing row that was emptied keeps its old value.
+        extra_specs: Object.fromEntries(
+          extraSpecs
+            .map(s => {
+              const k = s.key.trim(), v = s.value.trim()
+              if (k && v) return [k, v] as const
+              return s.editing && s.original ? [s.original.key, s.original.value] as const : null
+            })
+            .filter((e): e is readonly [string, string] => !!e)
+        ),
         // Only sent when set now or previously set (so it can be cleared).
         ...(dpValue !== null || product?.prices?.['D.P.'] != null ? { dp: dpValue } : {}),
       })
@@ -972,13 +1018,13 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
                   <button
                     type="button"
                     onClick={() => setSpecsOpen(v => !v)}
-                    className="flex items-center gap-1.5 text-xs font-semibold font-pop text-primary hover:text-primary-dark"
+                    className="flex items-center gap-1.5 text-md font-semibold font-pop text-primary hover:text-primary-dark"
                   >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
                       className={`transition-transform ${specsOpen ? 'rotate-90' : ''}`}>
                       <polyline points="9 18 15 12 9 6"/>
                     </svg>
-                    {specsOpen ? 'Hide specifications' : 'Add specifications (optional)'}
+                    {specsOpen ? 'Hide specifications' : mode === 'edit' ? 'Edit specifications' : 'Add specifications (optional)'}
                   </button>
 
                   {specsOpen && (
@@ -1009,6 +1055,105 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
                         <textarea value={heroDescription} onChange={e => setHeroDescription(e.target.value)} rows={2} className={`${specInputCls} resize-none`} /></div>
                       <div className="col-span-2"><label className={specLabelCls}>Website</label>
                         <input type="text" value={website} onChange={e => setWebsite(e.target.value)} className={specInputCls} /></div>
+
+                      {/* More specifications — any label/value (extra_specs) */}
+                      <div className="col-span-2 mt-1 border-t border-gray-mid pt-3">
+                        <label className={specLabelCls}>More specifications</label>
+                        {extraSpecs.length > 0 && (
+                          <div className="mb-2 space-y-2">
+                            {extraSpecs.map(row => {
+                              const iconBtn = 'flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-lg border text-xs transition-colors'
+                              if (row.editing) {
+                                const canAdd = !!row.key.trim() && !!row.value.trim()
+                                const onKey = (e: React.KeyboardEvent) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); confirmSpec(row) }
+                                  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelSpec(row) }
+                                }
+                                return (
+                                  // Stacked so both fields get the full width — long values stay readable.
+                                  <div key={row.id} className="space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-3">
+                                    <div>
+                                      <label className={specLabelCls}>Label</label>
+                                      <input
+                                        type="text"
+                                        value={row.key}
+                                        onChange={e => updateSpec(row.id, { key: e.target.value })}
+                                        onKeyDown={onKey}
+                                        placeholder="e.g. Material"
+                                        aria-label="Specification label"
+                                        autoFocus
+                                        className={`${specInputCls} py-2.5 text-sm`}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className={specLabelCls}>Value</label>
+                                      <input
+                                        type="text"
+                                        value={row.value}
+                                        onChange={e => updateSpec(row.id, { value: e.target.value })}
+                                        onKeyDown={onKey}
+                                        placeholder="e.g. Die-cast aluminium"
+                                        aria-label="Specification value"
+                                        className={`${specInputCls} py-2.5 text-sm`}
+                                      />
+                                    </div>
+                                    <div className="flex justify-end gap-2 pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => cancelSpec(row)}
+                                        className="flex items-center gap-1.5 rounded-lg border border-gray-mid bg-white px-3 py-2 text-xs font-semibold font-bai text-gray-text transition-colors hover:border-foreground hover:text-foreground"
+                                      >
+                                        ✕ Close
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => confirmSpec(row)}
+                                        disabled={!canAdd}
+                                        className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold font-bai text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-40"
+                                      >
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                        Add
+                                      </button>
+                                    </div>
+                                  </div>
+                                )
+                              }
+                              return (
+                                <div key={row.id} className="flex items-center gap-2 rounded-lg border border-gray-mid bg-white py-1 pl-3 pr-1">
+                                  <span className="w-2/5 truncate text-[11px] font-semibold font-pop uppercase tracking-wide text-gray-dark" title={row.key}>{row.key}</span>
+                                  <span className="min-w-0 flex-1 break-words text-xs font-bai text-foreground">{row.value}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => editSpec(row)}
+                                    title="Edit"
+                                    aria-label={`Edit ${row.key}`}
+                                    className={`${iconBtn} h-7 w-7 border-transparent text-gray-dark hover:border-gray-mid hover:text-primary`}
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSpec(row.id)}
+                                    title="Remove"
+                                    aria-label={`Remove ${row.key}`}
+                                    className={`${iconBtn} h-7 w-7 border-transparent text-gray-dark hover:border-red-300 hover:text-red-500`}
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={addSpecRow}
+                          className="flex items-center gap-1.5 rounded-lg border border-dashed border-primary/50 px-3 py-2 text-sm font-semibold font-bai text-primary hover:border-primary hover:bg-primary/5"
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                          Add specification
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

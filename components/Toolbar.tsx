@@ -137,7 +137,8 @@ export default function Toolbar({
           )}
         </button>
 
-        {can('create') && (
+        {/* In the admin shell, "Add Product" lives in the sidebar instead. */}
+        {can('create') && !adminShell && (
           <button onClick={onAdd}
             className="tap-target flex h-11 flex-shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-bold font-bai text-white shadow-sm transition-colors hover:bg-primary-dark">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>

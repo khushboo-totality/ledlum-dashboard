@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import AuthScreen from '@/components/AuthScreen'
 import CatalogPage from '@/components/CatalogPage'
@@ -16,6 +16,9 @@ function PageInner() {
   const [hydrated, setHydrated] = useState(false)
   const [section, setSection] = useState<AdminSection>('products')
   const [catalogKey, setCatalogKey] = useState(0)
+  // Sidebar "Add Product" → CatalogPage opens its create modal, then clears this.
+  const [addProductRequested, setAddProductRequested] = useState(false)
+  const clearAddProduct = useCallback(() => setAddProductRequested(false), [])
 
   // Mark hydrated after mount to avoid SSR/client mismatch
   useEffect(() => {
@@ -42,9 +45,18 @@ function PageInner() {
   }
 
   return (
-    <AdminShell section={section} onSection={changeSection}>
+    <AdminShell
+      section={section}
+      onSection={changeSection}
+      onAddProduct={() => { changeSection('products'); setAddProductRequested(true) }}
+    >
       <div className={section === 'products' ? '' : 'hidden'}>
-        <CatalogPage key={catalogKey} initialMode="product" />
+        <CatalogPage
+          key={catalogKey}
+          initialMode="product"
+          addProductRequested={addProductRequested}
+          onAddProductHandled={clearAddProduct}
+        />
       </div>
 
       {section === 'categories' && (

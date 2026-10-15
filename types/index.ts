@@ -165,6 +165,8 @@ export interface ProductFormData {
   cri?: string
   website?: string
   product_type?: string
+  /** Free-form extra specifications (label → value); {} clears them. */
+  extra_specs?: Record<string, string>
   /** D.P. (dealer price); null clears it, undefined leaves it unchanged. */
   dp?: number | null
 }
