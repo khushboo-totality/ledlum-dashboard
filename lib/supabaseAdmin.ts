@@ -4,7 +4,6 @@
 // app's own API routes (app/api/**), which run server-side.
 import { createClient } from '@supabase/supabase-js'
 
-
 const url        = process.env.SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
