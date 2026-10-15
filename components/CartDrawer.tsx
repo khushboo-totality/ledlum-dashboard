@@ -53,6 +53,18 @@ export default function CartDrawer() {
   // Compact item list for the activity log.
   const quoteSummary = () => items.map(i => ({ productCode: i.productCode, quantity: i.quantity, selection: i.selection }))
 
+  // Cart lines as sent to /api/quote-request and /api/boq-download.
+  const requestItems = () => items.map(i => ({
+    productCode:  i.productCode,
+    productName:  i.productName,
+    productImage: i.productImage,
+    productSpecs: i.productSpecs,   // snapshot, so the BOQ can be re-downloaded from My Quotes
+    context:      itemContext(i),
+    quantity:     i.quantity,
+    selection:    i.selection,
+    discount:     i.discount ?? 0,   // price itself is re-read on the server
+  }))
+
   const buildEmailBody = () => {
     const header =
       `LEDLUM — Quote Request\n${'='.repeat(50)}\n\n` +
@@ -105,7 +117,13 @@ export default function CartDrawer() {
         preparedBy: user?.name ?? '',
         dealerName: user?.company ?? user?.name ?? '',
       })
-      trackActivity('boq_downloaded', { items: quoteSummary(), totalQty })
+      // Logs 'boq_downloaded' and emails the sales team — fire-and-forget,
+      // the PDF is already downloaded.
+      authFetch('/api/boq-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: boqDetails, items: requestItems() }),
+      }).catch(() => {})
     } catch (err) {
       console.error('[CartDrawer] PDF export failed:', err)
       toast('Failed to generate PDF', 'error')
@@ -126,16 +144,7 @@ export default function CartDrawer() {
         body: JSON.stringify({
           note,
           project: boqDetails,   // same project details as the BOQ form — saved with the quote
-          items: items.map(i => ({
-            productCode:  i.productCode,
-            productName:  i.productName,
-            productImage: i.productImage,
-            productSpecs: i.productSpecs,   // snapshot, so the BOQ can be re-downloaded from My Quotes
-            context:      itemContext(i),
-            quantity:     i.quantity,
-            selection:    i.selection,
-            discount:     i.discount ?? 0,   // price itself is re-read on the server
-          })),
+          items: requestItems(),
         }),
       })
       const data = await res.json().catch(() => ({}))
