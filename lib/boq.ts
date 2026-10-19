@@ -4,6 +4,7 @@
 import type { CartItem } from '@/types'
 import { type BoqRow, blankMeta } from '@/boq/BOQDocument'
 import { applySelection, linePricing } from '@/lib/cartSpecs'
+import { priceKeyOf } from '@/lib/productOptions'
 
 /** Project details printed on the BOQ header (all optional — blank if empty). */
 export interface BoqProjectDetails {
@@ -34,6 +35,8 @@ export function buildBoqRows(lines: BoqLine[]): BoqRow[] {
       // D.P. per unit, line discount %, price after discount, line total
       // (0 for items without a price — the PDF hides price columns only if every row is 0).
       mrp: p.unit ?? 0,
+      // Which price that rate is (D.P., RF+BLE, DT8 …) — it gets its own column.
+      priceKey: priceKeyOf(item.selection),
       disc: p.disc,
       net: p.net ?? 0,
       total: p.total ?? 0,

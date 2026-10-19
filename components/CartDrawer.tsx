@@ -10,7 +10,7 @@ import { useZones } from '@/context/ZonesContext'
 import { linePricing, formatInr } from '@/lib/cartSpecs'
 import { authFetch, trackActivity } from '@/lib/supabaseClient'
 import { downloadBoq, EMPTY_BOQ_DETAILS, type BoqProjectDetails as BoqDetails } from '@/lib/boq'
-import { OPTION_KEY, missingChoices } from '@/lib/productOptions'
+import { OPTION_KEY, missingChoices, priceKeyOf } from '@/lib/productOptions'
 import type { CartItem } from '@/types'
 
 const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/
@@ -267,12 +267,12 @@ export default function CartDrawer() {
       const p = linePricing(item)
       const price = p.unit === null
         ? '   Price   : on request'
-        : `   D.P.    : ${formatInr(p.unit)}${p.disc ? `  · Disc ${p.disc}% → ${formatInr(p.net!)}` : ''}\n   Total   : ${formatInr(p.total!)}`
+        : `   ${priceKeyOf(item.selection).padEnd(8)}: ${formatInr(p.unit)}${p.disc ? `  · Disc ${p.disc}% → ${formatInr(p.net!)}` : ''}\n   Total   : ${formatInr(p.total!)}`
       return `\n${i + 1}. ${item.productName}\n   ${context}\n   Quantity: ${item.quantity}\n${price}\n${specs || '   (No configuration selected)'}`
     }).join('\n')
 
     const totalsText = quoteTotals.hasPrices
-      ? `Subtotal (D.P.): ${formatInr(quoteTotals.gross)}\n` +
+      ? `Subtotal      : ${formatInr(quoteTotals.gross)}\n` +
         (quoteTotals.discount > 0 ? `Discount      : − ${formatInr(quoteTotals.discount)}\n` : '') +
         `Total         : ${formatInr(quoteTotals.net)} (excl. GST)\n\n`
       : ''

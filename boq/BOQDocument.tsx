@@ -9,6 +9,7 @@
 // lib/exportBoqPdf.tsx — every <section> is exactly one fixed-size page.
 
 import type { ReactNode } from "react";
+import { sortPriceKeys } from "@/lib/productOptions";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -21,7 +22,9 @@ export type BoqRow = {
   specs: Record<string, string>;
   qty: number;
   unit: string;
-  mrp: number; // D.P. per unit (list)
+  mrp: number; // list rate per unit, of the price `priceKey`
+  /** Which price `mrp` is — "D.P." or the picked option (RF+BLE, DT8 …); one column each. */
+  priceKey?: string;
   disc: number; // percent
   net: number; // net rate per unit
   total: number; // line amount
@@ -513,13 +516,13 @@ function SummaryPage({ meta, groups, rows, totals, hasPrices, quoteRef, pageNo, 
   );
 }
 
-function SchedulePage({ meta, entries, first, brought, carried, isLastSchedule, totals, hasPrices, quoteRef, pageNo, pageCount }: {
+function SchedulePage({ meta, entries, first, brought, carried, isLastSchedule, totals, hasPrices, priceCols, quoteRef, pageNo, pageCount }: {
   meta: BoqMeta; entries: Entry[]; first: boolean; brought: number; carried: number; isLastSchedule: boolean;
-  totals: BoqTotals; hasPrices: boolean; quoteRef: string; pageNo: number; pageCount: number;
+  totals: BoqTotals; hasPrices: boolean; priceCols: string[]; quoteRef: string; pageNo: number; pageCount: number;
 }) {
   const th = "py-2.5 px-2 text-[9.5px] font-medium tracking-[0.18em] whitespace-nowrap";
   const td = "px-2 align-middle";
-  const cols = hasPrices ? 14 : 10;
+  const cols = hasPrices ? 13 + priceCols.length : 10;
   return (
     <Page>
       <RunningHeader meta={meta} quoteRef={quoteRef} />
@@ -528,7 +531,7 @@ function SchedulePage({ meta, entries, first, brought, carried, isLastSchedule, 
           no="02"
           title="Itemised schedule"
           continued={!first}
-          intro="Full bill of quantities grouped by supply group. Each band lists its products with specification, quantity, D.P., discount and net rate, with the group subtotal in the band."
+          intro={`Full bill of quantities grouped by supply group. Each band lists its products with specification, quantity, list rate (${priceCols.join(" / ")}), discount and net rate, with the group subtotal in the band.`}
         />
         <table className="w-full border-collapse text-[12px]" style={{ color: C.ink }}>
           <thead>
@@ -543,7 +546,7 @@ function SchedulePage({ meta, entries, first, brought, carried, isLastSchedule, 
               <th className={th}>DIMENSION</th>
               <th className={`${th} text-right`}>QTY</th>
               <th className={th}>UOM</th>
-              {hasPrices && <th className={`${th} text-right`}>D.P.</th>}
+              {hasPrices && priceCols.map((k) => <th key={k} className={`${th} text-right`}>{k.toUpperCase()}</th>)}
               {hasPrices && <th className={`${th} text-right`}>DISC</th>}
               {hasPrices && <th className={`${th} text-right`}>NET RATE</th>}
               {hasPrices && <th className={`${th} pr-1 text-right`}>AMOUNT</th>}
@@ -567,7 +570,7 @@ function SchedulePage({ meta, entries, first, brought, carried, isLastSchedule, 
                     {e.group.rows.length} item{e.group.rows.length === 1 ? "" : "s"}
                   </td>
                   {hasPrices && (
-                    <td colSpan={4} className="pr-1 text-right">
+                    <td colSpan={3 + priceCols.length} className="pr-1 text-right">
                       <span className="mr-3 text-[10.5px] tracking-[0.14em]" style={{ color: C.muted }}>Group subtotal</span>
                       <span className={`${NUM} text-[13px] font-bold`}>Rs {inr(e.group.amount)}</span>
                     </td>
@@ -603,7 +606,11 @@ function SchedulePage({ meta, entries, first, brought, carried, isLastSchedule, 
                       <td className={`${td} ${NUM} max-w-[120px] text-[11.5px]`}>{dash(v.dimension)}</td>
                       <td className={`${td} ${NUM} text-right font-semibold`}>{inr0(e.row.qty)}</td>
                       <td className={td} style={{ color: C.text }}>{uom(e.row.unit)}</td>
-                      {hasPrices && <td className={`${td} ${NUM} text-right`} style={{ color: C.muted }}>{e.row.mrp ? inr(e.row.mrp) : "—"}</td>}
+                      {hasPrices && priceCols.map((k) => (
+                        <td key={k} className={`${td} ${NUM} text-right`} style={{ color: C.muted }}>
+                          {e.row.mrp && (e.row.priceKey ?? "D.P.") === k ? inr(e.row.mrp) : "—"}
+                        </td>
+                      ))}
                       {hasPrices && <td className={`${td} ${NUM} text-right`} style={{ color: C.goldDark }}>{e.row.disc ? `${e.row.disc}%` : "—"}</td>}
                       {hasPrices && <td className={`${td} ${NUM} text-right`}>{e.row.net ? inr(e.row.net) : "—"}</td>}
                       {hasPrices && <td className={`${td} ${NUM} pr-1 text-right font-bold`}>{e.row.total ? inr(e.row.total) : "—"}</td>}
@@ -696,6 +703,9 @@ export default function BOQDocument({ meta, rows, totals }: { meta: BoqMeta; row
   const gross = rows.reduce((s, r) => s + r.mrp * r.qty, 0);
   const avgDisc = gross > 0 ? Math.round(((gross - basic) / gross) * 1000) / 10 : 0;
 
+  // One rate column per price used (D.P., RF+BLE, DT8 …), each line under its own.
+  const priceCols = sortPriceKeys(rows.filter((r) => r.mrp).map((r) => r.priceKey ?? "D.P."));
+
   const groups = buildGroups(rows);
   const schedule = paginateSchedule(groups);
   const pageCount = 2 + schedule.length + 1;
@@ -726,6 +736,7 @@ export default function BOQDocument({ meta, rows, totals }: { meta: BoqMeta; row
           isLastSchedule={i === schedule.length - 1}
           totals={resolved}
           hasPrices={hasPrices}
+          priceCols={priceCols}
           quoteRef={quoteRef}
           pageNo={3 + i}
           pageCount={pageCount}

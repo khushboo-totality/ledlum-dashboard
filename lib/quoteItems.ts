@@ -2,7 +2,7 @@
 // /api/quote-request (Send quote) and /api/boq-download (BOQ download alert).
 import { EMAIL, escapeHtml } from '@/lib/email'
 import { getPricesForModels } from '@/lib/services/products'
-import { selectedUnitPrice } from '@/lib/productOptions'
+import { priceColumns, priceKeyOf, selectedUnitPrice } from '@/lib/productOptions'
 
 export const MAX_ITEMS = 200
 
@@ -168,11 +168,16 @@ export function itemsTable(items: QuoteItem[]): string {
   const num = `${td}text-align:right;white-space:nowrap;`
   const chip = `display:inline-block;margin:6px 4px 0 0;padding:3px 8px;background:${EMAIL.page};border-radius:4px;font-size:11px;color:#555555;`
 
+  // One rate column per price used (D.P., RF+BLE, DT8 …) — each line's rate sits under its option.
+  const cols = priceColumns(items.map(i => i.selection))
   const rows = items.map((item, i) => {
     const specs = Object.entries(item.selection)
       .map(([k, v]) => `<span style="${chip}">${escapeHtml(cap(k))}: <strong>${escapeHtml(v)}</strong></span>`)
       .join('')
     const p = linePricing(item)
+    const rate = (col: string) => priceKeyOf(item.selection) !== col
+      ? `<span style="color:${EMAIL.faint};">—</span>`
+      : item.unitPrice === null ? `<span style="color:${EMAIL.faint};">On request</span>` : inr(item.unitPrice)
     return `<tr>
       <td style="${td}color:${EMAIL.faint};width:18px;">${i + 1}</td>
       <td style="${td}">
@@ -182,7 +187,7 @@ export function itemsTable(items: QuoteItem[]): string {
         ${specs ? `<div>${specs}</div>` : ''}
       </td>
       <td style="${num}font-weight:700;">${item.quantity}</td>
-      <td style="${num}">${item.unitPrice === null ? `<span style="color:${EMAIL.faint};">On request</span>` : inr(item.unitPrice)}</td>
+      ${cols.map(c => `<td style="${num}">${rate(c)}</td>`).join('')}
       <td style="${num}">${item.discount ? `${item.discount}%` : `<span style="color:${EMAIL.faint};">—</span>`}</td>
       <td style="${num}font-weight:700;">${p ? inr(p.total) : `<span style="color:${EMAIL.faint};">—</span>`}</td>
     </tr>`
@@ -191,7 +196,7 @@ export function itemsTable(items: QuoteItem[]): string {
   const th = `${F}padding:10px;background:${EMAIL.soft};border-bottom:1px solid ${EMAIL.line};text-align:left;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:${EMAIL.muted};`
   const thR = `${th}text-align:right;`
   const table = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
-    <tr><th style="${th}">#</th><th style="${th}">Product</th><th style="${thR}">Qty</th><th style="${thR}">D.P.</th><th style="${thR}">Disc</th><th style="${thR}">Total</th></tr>
+    <tr><th style="${th}">#</th><th style="${th}">Product</th><th style="${thR}">Qty</th>${cols.map(c => `<th style="${thR}">${escapeHtml(c)}</th>`).join('')}<th style="${thR}">Disc</th><th style="${thR}">Total</th></tr>
     ${rows}
   </table>`
 
@@ -202,7 +207,7 @@ export function itemsTable(items: QuoteItem[]): string {
       <td style="${F}padding:4px 10px;text-align:right;font-size:13px;color:${EMAIL.ink};white-space:nowrap;width:120px;">${value}</td></tr>`
   return `${table}
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;">
-    ${line('Subtotal (D.P.)', inr(t.gross))}
+    ${line('Subtotal', inr(t.gross))}
     ${t.discount > 0 ? line('Discount', `− ${inr(t.discount)}`) : ''}
     <tr><td style="${F}padding:12px 10px 4px;text-align:right;font-size:14px;font-weight:700;color:${EMAIL.ink};border-top:2px solid ${EMAIL.ink};">Total <span style="font-weight:400;color:${EMAIL.muted};">(excl. GST)</span></td>
       <td style="${F}padding:12px 10px 4px;text-align:right;font-size:18px;font-weight:700;color:${EMAIL.gold};white-space:nowrap;border-top:2px solid ${EMAIL.ink};">${inr(t.net)}</td></tr>

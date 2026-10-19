@@ -25,12 +25,32 @@ export function canonicalPriceKey(name: string): string {
 
 export type PriceOption = CartPriceOption
 
+/** Display order of price keys: D.P. first, then drivers, then the rest. */
+function priceRank(k: string) {
+  return k === DP_KEY ? 0 : (DRIVER_OPTIONS as readonly string[]).includes(k) ? 1 + DRIVER_OPTIONS.indexOf(k as typeof DRIVER_OPTIONS[number]) : 99
+}
+const byPriceRank = (a: string, b: string) => priceRank(a) - priceRank(b) || a.localeCompare(b, undefined, { numeric: true })
+
 /** The product's prices as options: D.P. first, then drivers, then the rest. */
 export function priceOptions(product: Pick<Product, 'prices'>): PriceOption[] {
-  const rank = (k: string) => (k === DP_KEY ? 0 : (DRIVER_OPTIONS as readonly string[]).includes(k) ? 1 + DRIVER_OPTIONS.indexOf(k as typeof DRIVER_OPTIONS[number]) : 99)
   return Object.entries(product.prices ?? {})
     .map(([key, price]) => ({ key, price }))
-    .sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key, undefined, { numeric: true }))
+    .sort((a, b) => byPriceRank(a.key, b.key))
+}
+
+/** Which price a quote line is priced at — its picked option, else D.P. */
+export const priceKeyOf = (selection: CartSelection | undefined) => selection?.[OPTION_KEY] || DP_KEY
+
+/** The distinct price keys of some quote lines, in display order — one price
+ * column each in the BOQ / emails, so every line's rate sits under its option. */
+export function priceColumns(selections: (CartSelection | undefined)[]): string[] {
+  return sortPriceKeys(selections.map(priceKeyOf))
+}
+
+/** Distinct price keys in display order; [D.P.] when there are none. */
+export function sortPriceKeys(keys: string[]): string[] {
+  const out = Array.from(new Set(keys)).sort(byPriceRank)
+  return out.length ? out : [DP_KEY]
 }
 
 /** key = cart selection key — matches lib/cartSpecs.ts SELECTION_TO_COLUMN so the BOQ shows the pick. */

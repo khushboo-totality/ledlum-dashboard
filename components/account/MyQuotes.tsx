@@ -9,6 +9,7 @@ import { formatInr, linePricing } from '@/lib/cartSpecs'
 import { downloadBoq } from '@/lib/boq'
 import type { QuoteDetail, QuoteSummary } from '@/lib/quotes'
 import { getImageUrl } from '@/lib/auth'
+import { priceKeyOf } from '@/lib/productOptions'
 
 const fmtDate = (d: string) =>
   new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -91,7 +92,7 @@ export default function MyQuotes() {
     }
     toast(
       `${detail.items.length} item${detail.items.length === 1 ? '' : 's'} copied to your quote cart` +
-        (changed ? ` — ${changed} price${changed === 1 ? '' : 's'} updated to today's D.P.` : ''),
+        (changed ? ` — ${changed} price${changed === 1 ? '' : 's'} updated to today's prices` : ''),
       'success',
     )
     openCart()
@@ -195,7 +196,7 @@ export default function MyQuotes() {
                     <tr className="bg-[#f6f4ef] text-left text-[11px] uppercase tracking-wide text-gray-dark">
                       <th className="px-4 py-3">Product</th>
                       <th className="px-3 py-3 text-right">Qty</th>
-                      <th className="px-3 py-3 text-right">D.P.</th>
+                      <th className="px-3 py-3 text-right">Rate</th>
                       <th className="px-3 py-3 text-right">Disc</th>
                       <th className="px-4 py-3 text-right">Total</th>
                     </tr>
@@ -219,13 +220,14 @@ export default function MyQuotes() {
                                 <p className="font-bold font-bai text-foreground">{line.productName}</p>
                                 {specs.length > 0 && <p className="text-xs text-gray-dark">{specs.join(' · ')}</p>}
                                 {line.currentUnitPrice != null && line.unitPrice != null && line.currentUnitPrice !== line.unitPrice && (
-                                  <p className="mt-0.5 text-[11px] text-amber-700">Today&apos;s D.P.: {formatInr(line.currentUnitPrice)}</p>
+                                  <p className="mt-0.5 text-[11px] text-amber-700">Today&apos;s {priceKeyOf(line.selection)}: {formatInr(line.currentUnitPrice)}</p>
                                 )}
                               </div>
                             </div>
                           </td>
                           <td className="px-3 py-3 text-right font-semibold">{line.quantity}</td>
-                          <td className="px-3 py-3 text-right whitespace-nowrap">{p.unit === null ? <span className="text-gray-dark">on request</span> : formatInr(p.unit)}</td>
+                          <td className="px-3 py-3 text-right whitespace-nowrap">{p.unit === null ? <span className="text-gray-dark">on request</span> : formatInr(p.unit)}
+                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-dark">{priceKeyOf(line.selection)}</span></td>
                           <td className="px-3 py-3 text-right">{p.disc ? `${p.disc}%` : '—'}</td>
                           <td className="px-4 py-3 text-right font-bold whitespace-nowrap">{p.total === null ? '—' : formatInr(p.total)}</td>
                         </tr>
@@ -236,7 +238,7 @@ export default function MyQuotes() {
               </div>
               {detail.total !== null && (
                 <div className="space-y-1 border-t border-gray px-4 py-4 text-sm font-pop">
-                  <div className="flex justify-end gap-8"><span className="text-gray-text">Subtotal (D.P.)</span><span className="w-28 text-right font-semibold">{formatInr(detail.subtotal ?? 0)}</span></div>
+                  <div className="flex justify-end gap-8"><span className="text-gray-text">Subtotal</span><span className="w-28 text-right font-semibold">{formatInr(detail.subtotal ?? 0)}</span></div>
                   {(detail.discount ?? 0) > 0 && (
                     <div className="flex justify-end gap-8"><span className="text-gray-text">Discount</span><span className="w-28 text-right font-semibold text-green-700">− {formatInr(detail.discount!)}</span></div>
                   )}
