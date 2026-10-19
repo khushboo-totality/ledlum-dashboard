@@ -146,6 +146,8 @@ function rowView(r: BoqRow) {
     cct: a.cct,
     finish: a.body_colors ?? s["Material"],
     dimension: a.dimensions,
+    /** Price option picked at add-to-quote (RF+BLE, DT8 …) — see lib/productOptions.ts. */
+    option: a.option,
   };
 }
 
@@ -589,7 +591,10 @@ function SchedulePage({ meta, entries, first, brought, carried, isLastSchedule, 
                           {v.name}
                           {v.ip && <span style={{ color: C.muted }}> · {v.ip}</span>}
                         </p>
-                        <p className={`${NUM} mt-0.5 text-[10.5px] tracking-[0.04em]`} style={{ color: C.muted }}>{v.code}</p>
+                        <p className={`${NUM} mt-0.5 text-[10.5px] tracking-[0.04em]`} style={{ color: C.muted }}>
+                          {v.code}
+                          {v.option && <span style={{ color: C.goldDark }}> · {v.option}</span>}
+                        </p>
                       </td>
                       <td className={`${td} ${NUM}`}>{dash(v.watt)}</td>
                       <td className={`${td} ${NUM}`}>{dash(v.beam)}</td>

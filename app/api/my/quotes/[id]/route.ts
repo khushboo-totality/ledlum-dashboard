@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getCaller } from '@/lib/serverAuth'
-import { getPricesForModels, DP_KEY } from '@/lib/services/products'
+import { getPricesForModels } from '@/lib/services/products'
+import { selectedUnitPrice } from '@/lib/productOptions'
 import type { QuoteDetail, QuoteLine } from '@/lib/quotes'
 import { toQuoteSummary, type QuoteRow } from '@/lib/quotesServer'
 
@@ -19,7 +20,7 @@ interface QuoteDetailRow extends QuoteRow {
 }
 
 // GET — one quote in full (own quotes only; admins can open any).
-// Each line also carries today's D.P. (currentUnitPrice) for "Copy to cart".
+// Each line also carries today's price for its chosen option (currentUnitPrice) for "Copy to cart".
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const caller = await getCaller(req)
   if (!caller) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
@@ -49,7 +50,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     partnerName: row.partner_name,
     company: row.company,
     emailSent: row.email_sent,
-    items: items.map(i => ({ ...i, currentUnitPrice: current.get(i.productCode)?.[DP_KEY] ?? null })),
+    items: items.map(i => ({
+      ...i,
+      currentUnitPrice: selectedUnitPrice({ prices: current.get(i.productCode) ?? null }, i.selection ?? {}),
+    })),
   }
   return NextResponse.json(detail)
 }

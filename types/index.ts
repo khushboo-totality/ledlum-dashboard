@@ -118,6 +118,13 @@ export interface CartProductSpecs {
   extraSpecs: Record<string, string>
 }
 
+/** A price the partner can pick for a quote line (D.P., RF+BLE, DT8 …). */
+export interface CartPriceOption { key: string; price: number }
+/** A spec column with several values; one must be picked ("3000K" from "3000K/4000K"). */
+export interface CartSpecChoice { key: string; label: string; values: string[] }
+/** Choices snapshotted at add-to-cart time, picked in the cart — see lib/productOptions.ts. */
+export interface CartItemOptions { prices: CartPriceOption[]; specs: CartSpecChoice[] }
+
 export interface CartItem {
   id: string
   productCode: string
@@ -137,6 +144,8 @@ export interface CartItem {
   unitPrice?: number | null
   /** Discount on this line, in percent (0–100). */
   discount?: number
+  /** What still has to be / can be chosen for this line (absent = nothing to choose). */
+  options?: CartItemOptions
   addedAt: string
 }
 
@@ -169,6 +178,11 @@ export interface ProductFormData {
   extra_specs?: Record<string, string>
   /** D.P. (dealer price); null clears it, undefined leaves it unchanged. */
   dp?: number | null
+  /** ledlum_products.category — the sheet's "Category" column (the product-type filter level). */
+  sub_category?: string
+  is_track?: boolean
+  /** Price keys to set in ledlum_product_prices (e.g. "D.P. (2 Mtr)"); null removes a key. */
+  prices?: Record<string, number | null>
 }
 
 export interface Stats {

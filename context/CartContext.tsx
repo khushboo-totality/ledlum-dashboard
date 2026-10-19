@@ -4,6 +4,11 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 import { v4 as uuidv4 } from 'uuid'
 import type { CartItem } from '@/types'
 import { trackActivity } from '@/lib/supabaseClient'
+import { OPTION_KEY } from '@/lib/productOptions'
+
+/** Selection identity regardless of key order. */
+const selectionKey = (s: Record<string, string>) =>
+  JSON.stringify(Object.entries(s).filter(([, v]) => v).sort(([a], [b]) => a.localeCompare(b)))
 
 interface CartContextType {
   items: CartItem[]
@@ -14,6 +19,8 @@ interface CartContextType {
   updateQty: (id: string, qty: number) => void
   /** Sets a line's discount in percent (clamped to 0–100). */
   updateDiscount: (id: string, percent: number) => void
+  /** Picks (or, with '', clears) one choice on a line — the price option also sets its price. */
+  updateSelection: (id: string, key: string, value: string) => void
   clearCart: () => void
   openCart: () => void
   closeCart: () => void
@@ -34,9 +41,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addItem = useCallback((item: Omit<CartItem, 'id' | 'addedAt'>) => {
     setItems(prev => {
-      const selStr   = JSON.stringify(item.selection)
+      const selStr   = selectionKey(item.selection)
       const existing = prev.find(
-        i => i.productCode === item.productCode && JSON.stringify(i.selection) === selStr
+        i => i.productCode === item.productCode && selectionKey(i.selection) === selStr
       )
       if (existing) {
         return prev.map(i =>
@@ -67,6 +74,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems(prev => prev.map(i => i.id === id ? { ...i, discount: pct } : i))
   }, [])
 
+  const updateSelection = useCallback((id: string, key: string, value: string) => {
+    setItems(prev => {
+      const item = prev.find(i => i.id === id)
+      if (!item) return prev
+      const selection = { ...item.selection, [key]: value }
+      if (!value) delete selection[key]
+      const updated = {
+        ...item,
+        selection,
+        ...(key === OPTION_KEY && item.options
+          ? { unitPrice: item.options.prices.find(o => o.key === value)?.price ?? null }
+          : {}),
+      }
+      // Now identical to another line (same product + same picks)? Merge into that one.
+      const twin = prev.find(i => i.id !== id && i.productCode === item.productCode && selectionKey(i.selection) === selectionKey(selection))
+      if (twin) {
+        return prev
+          .filter(i => i.id !== id)
+          .map(i => (i.id === twin.id ? { ...i, quantity: i.quantity + item.quantity } : i))
+      }
+      return prev.map(i => (i.id === id ? updated : i))
+    })
+  }, [])
+
   const clearCart = useCallback(() => setItems([]), [])
   const openCart  = useCallback(() => setIsOpen(true),  [])
   const closeCart = useCallback(() => setIsOpen(false), [])
@@ -74,7 +105,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const total = items.reduce((sum, i) => sum + i.quantity, 0)
 
   return (
-    <CartContext.Provider value={{ items, isOpen, isPulsing, addItem, removeItem, updateQty, updateDiscount, clearCart, openCart, closeCart, total }}>
+    <CartContext.Provider value={{ items, isOpen, isPulsing, addItem, removeItem, updateQty, updateDiscount, updateSelection, clearCart, openCart, closeCart, total }}>
       {children}
     </CartContext.Provider>
   )

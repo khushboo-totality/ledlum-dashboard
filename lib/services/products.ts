@@ -33,7 +33,7 @@ export function invalidateAggregateCaches(): void {
   familiesCache.expires = 0
 }
 
-function chunk<T>(arr: T[], size: number): T[][] {
+export function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
   return out
@@ -55,7 +55,7 @@ async function selectAllPages<T>(
   return all
 }
 
-interface ProductRow {
+export interface ProductRow {
   id: number
   model: string | null
   family: string | null
@@ -78,6 +78,7 @@ interface ProductRow {
   cri: string | null
   website: string | null
   product_type: string | null
+  is_track?: boolean | null
   created_at: string
   extra_specs: Record<string, string> | null
 }
@@ -113,13 +114,20 @@ export async function getPricesForModels(models: string[]): Promise<Map<string, 
 /** Sets (or clears, with null) a product's D.P. in ledlum_product_prices,
  * keeping any other price keys (e.g. "D.P. (2 Mtr)") on that row. */
 async function setProductDp(model: string, dp: number | null): Promise<void> {
+  await setProductPrices(model, { [DP_KEY]: dp })
+}
+
+/** Sets (or removes, with null) the given price keys for a model, keeping the others. */
+async function setProductPrices(model: string, changes: Record<string, number | null>): Promise<void> {
   const { data: existing, error } = await supabaseAdmin
     .from(PRICE_TABLE).select('prices').eq('model', model).maybeSingle()
   if (error) throw new Error(`Failed to load price: ${error.message}`)
 
   const prices: Record<string, unknown> = { ...((existing?.prices as Record<string, unknown> | null) ?? {}) }
-  if (dp === null) delete prices[DP_KEY]
-  else prices[DP_KEY] = `Rs.${dp.toFixed(2)}`
+  for (const [key, value] of Object.entries(changes)) {
+    if (value === null) delete prices[key]
+    else prices[key] = `Rs.${value.toFixed(2)}`
+  }
   const now = new Date().toISOString()
 
   if (existing) {
@@ -127,7 +135,7 @@ async function setProductDp(model: string, dp: number | null): Promise<void> {
       ? await supabaseAdmin.from(PRICE_TABLE).update({ prices, updated_at: now }).eq('model', model)
       : await supabaseAdmin.from(PRICE_TABLE).delete().eq('model', model)
     if (upErr) throw new Error(`Failed to save price: ${upErr.message}`)
-  } else if (dp !== null) {
+  } else if (Object.keys(prices).length) {
     const { error: insErr } = await supabaseAdmin.from(PRICE_TABLE).insert({ model, prices, updated_at: now })
     if (insErr) throw new Error(`Failed to save price: ${insErr.message}`)
   }
@@ -182,7 +190,7 @@ function mapRowToProduct(row: ProductRow, zoneSlugs: string[], prices?: Record<s
   }
 }
 
-async function getZoneSlugsForProductIds(productIds: number[]): Promise<Map<number, string[]>> {
+export async function getZoneSlugsForProductIds(productIds: number[]): Promise<Map<number, string[]>> {
   const result = new Map<number, string[]>()
   if (productIds.length === 0) return result
 
@@ -442,6 +450,8 @@ function formToInsertRow(data: Partial<ProductFormData>) {
     website: data.website || null,
     product_type: data.product_type || null,
     extra_specs: cleanExtraSpecs(data.extra_specs),
+    ...(data.sub_category !== undefined ? { category: data.sub_category || null } : {}),
+    ...(data.is_track !== undefined ? { is_track: data.is_track } : {}),
   }
 }
 
@@ -456,6 +466,7 @@ export async function createProduct(data: ProductFormData): Promise<Product> {
   const zoneSlugs = data.zones?.length ? data.zones : data.zone ? [data.zone] : []
   await setProductZones(row.id, zoneSlugs)
   if (data.dp !== undefined && row.model) await setProductDp(row.model, data.dp)
+  if (data.prices && Object.keys(data.prices).length && row.model) await setProductPrices(row.model, data.prices)
 
   const [zoneMap, priceMap] = await Promise.all([
     getZoneSlugsForProductIds([row.id]),
@@ -491,6 +502,8 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
   if (data.website !== undefined) updateRow.website = data.website || null
   if (data.product_type !== undefined) updateRow.product_type = data.product_type || null
   if (data.extra_specs !== undefined) updateRow.extra_specs = cleanExtraSpecs(data.extra_specs)
+  if (data.sub_category !== undefined) updateRow.category = data.sub_category || null
+  if (data.is_track !== undefined) updateRow.is_track = data.is_track
 
   // Prices are keyed by model — remember the old one in case it's being renamed.
   let oldModel: string | null = null
@@ -521,6 +534,7 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
     if (mvErr) throw new Error(`Failed to move price to new model: ${mvErr.message}`)
   }
   if (data.dp !== undefined && row.model) await setProductDp(row.model, data.dp)
+  if (data.prices && Object.keys(data.prices).length && row.model) await setProductPrices(row.model, data.prices)
 
   const [zoneMap, priceMap] = await Promise.all([
     getZoneSlugsForProductIds([numId]),

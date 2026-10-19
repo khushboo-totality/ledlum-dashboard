@@ -1,7 +1,8 @@
 ﻿// Server-side: parsing + email rendering of partner quote lines — shared by
 // /api/quote-request (Send quote) and /api/boq-download (BOQ download alert).
 import { EMAIL, escapeHtml } from '@/lib/email'
-import { getPricesForModels, DP_KEY } from '@/lib/services/products'
+import { getPricesForModels } from '@/lib/services/products'
+import { selectedUnitPrice } from '@/lib/productOptions'
 
 export const MAX_ITEMS = 200
 
@@ -13,7 +14,8 @@ export interface QuoteItem {
   selection: Record<string, string>
   /** Partner's discount on this line, percent 0–100. */
   discount: number
-  /** D.P. per unit — looked up server-side from ledlum_product_prices (never trusted from the client). */
+  /** Price per unit of the chosen option (selection.option, else D.P.) — looked up
+   * server-side from ledlum_product_prices (never trusted from the client). */
   unitPrice: number | null
   /** Display-only snapshot for re-downloading the BOQ later. */
   productImage?: string
@@ -87,12 +89,13 @@ export function parseItems(raw: unknown): QuoteItem[] | null {
   return items
 }
 
-/** Fills each line's authoritative D.P. from ledlum_product_prices (by model).
+/** Fills each line's authoritative price from ledlum_product_prices (by model),
+ * for the option the partner picked (RF+BLE, DT8 …) or D.P. when none.
  * On lookup failure the lines stay unpriced rather than failing the request. */
 export async function applyPrices(items: QuoteItem[], tag: string): Promise<void> {
   try {
     const prices = await getPricesForModels(items.map(i => i.productCode))
-    for (const item of items) item.unitPrice = prices.get(item.productCode)?.[DP_KEY] ?? null
+    for (const item of items) item.unitPrice = selectedUnitPrice({ prices: prices.get(item.productCode) ?? null }, item.selection)
   } catch (err) {
     console.error(`[${tag}] price lookup failed:`, err)
   }

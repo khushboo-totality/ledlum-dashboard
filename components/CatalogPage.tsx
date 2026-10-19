@@ -9,7 +9,8 @@ import { useCart } from '@/context/CartContext'
 import { useProducts } from '@/lib/useProducts'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
-import { toCartProductSpecs, productDp } from '@/lib/cartSpecs'
+import { toCartProductSpecs } from '@/lib/cartSpecs'
+import { cartOptions, initialUnitPrice } from '@/lib/productOptions'
 import { getZonePath } from '@/lib/zones'
 import Header from '@/components/Header'
 import ZoneNav from '@/components/ZoneNav'
@@ -668,6 +669,8 @@ export default function CatalogPage({
 
   const handleQuickAdd = useCallback((product: Product) => {
     if (!can('cart')) return
+    // Options (driver / CCT / beam …) are picked in the quote cart.
+    const options = cartOptions(product)
     addItem({
       productCode:        product.Codes,
       productName:        product.Codes,
@@ -680,10 +683,11 @@ export default function CatalogPage({
       productSpecs:       toCartProductSpecs(product),
       selection: {},
       quantity: 1,
-      unitPrice:          productDp(product),
+      unitPrice:          initialUnitPrice(product),
       discount:           0,
+      options,
     })
-    toast(`${product.Codes} added to quote`, 'success')
+    toast(options ? `${product.Codes} added — choose its options in the quote cart` : `${product.Codes} added to quote`, 'success')
   }, [can, addItem, browseMode, activeCollectionNode, activeCollection, subcategoryFor, activeProductType, activeZone, toast])
 
   const isPartnerOrGuest = user?.role === 'partner' || user?.role === 'guest'  // kept for cart banner only

@@ -10,7 +10,8 @@ import { getImageUrl } from '@/lib/auth'
 import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
 import { SAMPLE_META } from '@/boq/BOQDocument'
-import { toCartProductSpecs, productDp } from '@/lib/cartSpecs'
+import { toCartProductSpecs } from '@/lib/cartSpecs'
+import { cartOptions, initialUnitPrice } from '@/lib/productOptions'
 import { formatColumnTitle, toDisplaySpecs } from '@/lib/productColumns'
 import { trackActivity } from '@/lib/supabaseClient'
 
@@ -144,6 +145,10 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
 
   const handleAddToCart = () => {
     if (!product) return
+    // Options (driver / CCT / beam …) are picked in the quote cart; demo
+    // products with a curated Configure tab already chose their specs here.
+    const options = cartOptions(product)
+    if (options && hasConfig) options.specs = []
     const heroImg = detail?.productAbout?.image || getImageUrl(product.ImageLink ?? "") || ''
     addItem({
       productCode:        product.Codes,
@@ -157,10 +162,11 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
       productSpecs:       toCartProductSpecs(product),
       selection,
       quantity:           qty,
-      unitPrice:          productDp(product),
+      unitPrice:          initialUnitPrice(product),
+      options,
       discount:           0,
     })
-    toast(`${product.Codes} added to quote`, 'success')
+    toast(options ? `${product.Codes} added — choose its options in the quote cart` : `${product.Codes} added to quote`, 'success')
   }
 
   if (!product && !open) return null

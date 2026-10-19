@@ -8,6 +8,7 @@ import { authFetch } from '@/lib/supabaseClient'
 import { uploadProductImage } from '@/lib/uploadImage'
 import FamilyPicker, { type FamilyOption } from './FamilyPicker'
 import { getImageUrl } from '@/lib/auth'
+import { DRIVER_OPTIONS } from '@/lib/productOptions'
 
 interface CategoryOption { id: number; name: string; collection: string | null; productCount: number }
 interface MainCategoryOption { name: string; label: string; count: number }
@@ -119,6 +120,8 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
   const [cri, setCri]                       = useState('')
   const [website, setWebsite]               = useState('')
   const [dp, setDp]                         = useState('')   // D.P. (dealer price), rupees
+  // Driver option prices (RF+BLE, Phasecut, DT6, DT8) — partners pick one when quoting.
+  const [driverPrices, setDriverPrices]     = useState<Record<string, string>>({})
   // Any other specs (extra_specs) — free label/value rows, shown on the
   // product page and as BOQ columns.
   const [extraSpecs, setExtraSpecs]         = useState<SpecRow[]>([])
@@ -198,6 +201,7 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
       setCri(product.cri ?? '')
       setWebsite(product.website ?? '')
       setDp(product.prices?.['D.P.'] != null ? String(product.prices['D.P.']) : '')
+      setDriverPrices(Object.fromEntries(DRIVER_OPTIONS.map(k => [k, product.prices?.[k] != null ? String(product.prices[k]) : ''])))
       const extras = Object.entries(product.extra_specs ?? {}).map(([k, v]) => specRow(k, String(v ?? '')))
       setExtraSpecs(extras)
       setSpecsOpen(extras.length > 0)
@@ -208,6 +212,7 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
       setHeroDescription(''); setGalleryImages([]); setWatts(''); setDimensions('')
       setCutoutSize(''); setBodyColors(''); setCct(''); setBeamAngle('')
       setIpRating(''); setLedChip(''); setLuminous(''); setCri(''); setWebsite(''); setDp('')
+      setDriverPrices({})
       setExtraSpecs([])
       setSpecsOpen(false)
       setSelectedZones(currentZone ? [currentZone] : [])
@@ -418,10 +423,17 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
   const selectedCategory = categories.find(c => String(c.id) === categoryId)
   const mainValue = collection === NEW_MAIN ? newMain.trim().toLowerCase() : collection
   // D.P.: blank = no price; otherwise a non-negative number (commas allowed).
-  const dpText  = dp.replace(/[,₹\s]/g, '')
-  const dpValue = dpText === '' ? null : Number(dpText)
-  const dpInvalid = dpValue !== null && (!Number.isFinite(dpValue) || dpValue < 0)
-  const canSubmit = !!codes.trim() && categoryId !== NEW_CATEGORY && collection !== NEW_MAIN && !loading && !dpInvalid
+  const parsePrice = (s: string) => { const t = s.replace(/[,₹\s]/g, ''); return t === '' ? null : Number(t) }
+  const badPrice = (n: number | null) => n !== null && (!Number.isFinite(n) || n < 0)
+  const dpValue = parsePrice(dp)
+  const dpInvalid = badPrice(dpValue)
+  const driverValues = Object.fromEntries(DRIVER_OPTIONS.map(k => [k, parsePrice(driverPrices[k] ?? '')]))
+  const driverInvalid = DRIVER_OPTIONS.filter(k => badPrice(driverValues[k]))
+  // Only send driver prices that are set now or were set before (so they can be cleared).
+  const driverPatch = Object.fromEntries(
+    DRIVER_OPTIONS.filter(k => driverValues[k] !== null || product?.prices?.[k] != null).map(k => [k, driverValues[k]])
+  )
+  const canSubmit = !!codes.trim() && categoryId !== NEW_CATEGORY && collection !== NEW_MAIN && !loading && !dpInvalid && driverInvalid.length === 0
 
   const handleSubmit = async () => {
     if (!canSubmit) return
@@ -475,6 +487,7 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
         ),
         // Only sent when set now or previously set (so it can be cleared).
         ...(dpValue !== null || product?.prices?.['D.P.'] != null ? { dp: dpValue } : {}),
+        ...(Object.keys(driverPatch).length ? { prices: driverPatch } : {}),
       })
       onClose()
     } finally { setLoading(false) }
@@ -774,6 +787,26 @@ export default function CrudModal({ mode, product, onSubmit, onClose, currentZon
                       className={`${inputCls} ${dpInvalid ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`} />
                     {dpInvalid && <p className="mt-1 text-[10px] text-red-500 font-pop">Enter a valid price</p>}
                   </div>
+                </div>
+
+                {/* Driver option prices — partners choose one of the filled-in options when quoting */}
+                <div>
+                  <label className={labelCls}>Driver option prices (₹)</label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {DRIVER_OPTIONS.map(k => (
+                      <div key={k}>
+                        <label className={specLabelCls}>{k}</label>
+                        <input type="text" inputMode="decimal" value={driverPrices[k] ?? ''}
+                          onChange={e => setDriverPrices(p => ({ ...p, [k]: e.target.value }))}
+                          placeholder="—"
+                          className={`${specInputCls} ${driverInvalid.includes(k) ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`} />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[10px] text-gray-dark font-pop">
+                    {driverInvalid.length ? <span className="text-red-500">Enter a valid price for {driverInvalid.join(', ')}</span>
+                      : 'Leave blank if the option isn’t available. With more than one price, partners must pick one when adding to a quote.'}
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
