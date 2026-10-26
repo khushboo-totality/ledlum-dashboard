@@ -11,7 +11,7 @@ import { useZones } from '@/context/ZonesContext'
 import { getProductDetail } from '@/lib/productDetails'
 import { SAMPLE_META } from '@/boq/BOQDocument'
 import { toCartProductSpecs } from '@/lib/cartSpecs'
-import { cartOptions, initialUnitPrice } from '@/lib/productOptions'
+import { cartOptions, initialUnitPrice, variantLabel } from '@/lib/productOptions'
 import { formatColumnTitle, toDisplaySpecs } from '@/lib/productColumns'
 import { trackActivity } from '@/lib/supabaseClient'
 
@@ -160,7 +160,8 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
       productSubcategory: browseMode === 'product' ? productSubcategory : undefined,
       productTypeName:    browseMode === 'product' ? productTypeName : undefined,
       productSpecs:       toCartProductSpecs(product),
-      selection,
+      // A variant's card: the quote line is that variant (priced at it).
+      selection:          { ...product.variantSelection, ...selection },
       quantity:           qty,
       unitPrice:          initialUnitPrice(product),
       options,
@@ -202,6 +203,12 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
     Object.entries(product.prices)
       .sort(([a], [b]) => (a === 'D.P.' ? -1 : b === 'D.P.' ? 1 : a.localeCompare(b, undefined, { numeric: true })))
       .forEach(([k, v]) => addSpec(k, `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`))
+  }
+  // Variants (the price list repeats this model per finish / accessory …) — one row each.
+  if (user && user.role !== 'guest' && product?.variants && product.variants.length > 1) {
+    const vs = product.variants
+    vs.forEach(v => addSpec(variantLabel(vs, v),
+      Object.entries(v.prices).map(([k, n]) => `${k} ₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`).join(' · ') || '—'))
   }
   addSpec('Wattage',       detail?.config?.watts?.join(', ')       ?? product?.watts)
   addSpec('Luminous',       detail?.config?.luminous?.join(', ')    ?? product?.luminous)
@@ -339,6 +346,7 @@ export default function ProductDetail({ product, onClose, onEdit, onDelete, brow
                   </div>
                 )}
                 <h2 className="text-lg sm:text-2xl font-bold text-foreground font-bai truncate">{title}</h2>
+                {product?.variantName && <p className="text-xs font-semibold text-primary font-pop">{product.variantName}</p>}
                 {zone && <p className="text-xs text-gray-dark font-pop mt-0.5">{zone.label}</p>}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getCaller } from '@/lib/serverAuth'
-import { getPricesForModels } from '@/lib/services/products'
+import { getPricingForModels, type Pricing } from '@/lib/services/products'
 import { selectedUnitPrice } from '@/lib/productOptions'
 import type { QuoteDetail, QuoteLine } from '@/lib/quotes'
 import { toQuoteSummary, type QuoteRow } from '@/lib/quotesServer'
@@ -35,9 +35,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   const items = Array.isArray(row.items) ? row.items : []
-  let current = new Map<string, Record<string, number>>()
+  let current = new Map<string, Pricing>()
   try {
-    current = await getPricesForModels(items.map(i => i.productCode))
+    current = await getPricingForModels(items.map(i => i.productCode))
   } catch (err) {
     console.error('[my/quotes] current price lookup failed:', err)
   }
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     emailSent: row.email_sent,
     items: items.map(i => ({
       ...i,
-      currentUnitPrice: selectedUnitPrice({ prices: current.get(i.productCode) ?? null }, i.selection ?? {}),
+      currentUnitPrice: selectedUnitPrice(current.get(i.productCode) ?? { prices: null }, i.selection ?? {}),
     })),
   }
   return NextResponse.json(detail)

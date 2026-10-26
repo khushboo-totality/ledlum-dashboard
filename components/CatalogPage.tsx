@@ -619,17 +619,25 @@ export default function CatalogPage({
     setActiveGroup(g); setActiveProductType(null)
   }, [])
 
-  const openEdit = useCallback((product: Product) => {
+  const openEdit = useCallback(async (product: Product) => {
     if (!can('edit')) { toast('Permission denied', 'error'); return }
+    // A variant's card shows one row of the product — edit the real product.
+    if (product.variantOf) {
+      const res = await fetch(`/api/products/${product.variantOf}`)
+      if (!res.ok) { toast('Could not load the product', 'error'); return }
+      product = await res.json()
+    }
     setEditingProduct(product); setModalMode('edit')
   }, [can, toast])
 
   const handleDelete = useCallback(async (product: Product) => {
     if (!can('delete')) { toast('Permission denied', 'error'); return }
-    if (!confirm(`Delete "${product.Codes}"? This cannot be undone.`)) return
+    if (!confirm(product.variantOf
+      ? `Delete "${product.Codes}" — all its variants? This cannot be undone.`
+      : `Delete "${product.Codes}"? This cannot be undone.`)) return
     try {
       // Each mode has its own product list — update the one on screen.
-      await (browseMode === 'product' ? ptDeleteProduct : deleteProduct)(product.id)
+      await (browseMode === 'product' ? ptDeleteProduct : deleteProduct)(product.variantOf ?? product.id)
       setSelectedProduct(prev => (prev?.id === product.id ? null : prev))
       toast('Product deleted', 'success')
     }
@@ -681,7 +689,8 @@ export default function CatalogPage({
       productSubcategory: browseMode === 'product' ? subcategoryFor(product) : undefined,
       productTypeName:    browseMode === 'product' ? activeProductType ?? undefined : undefined,
       productSpecs:       toCartProductSpecs(product),
-      selection: {},
+      // A variant's card: the quote line is that variant (priced at it).
+      selection: { ...product.variantSelection },
       quantity: 1,
       unitPrice:          initialUnitPrice(product),
       discount:           0,

@@ -45,6 +45,9 @@ export default function ProductRow({ product, index, onClick, onEdit, onDelete, 
       {/* Code + badges */}
       <div className="flex items-center gap-2 min-w-[160px]">
         <span className="font-bold text-sm font-bai text-foreground truncate">{displayCode}</span>
+        {product.variantName && (
+          <span className="truncate text-[11px] font-semibold text-primary font-pop" title={product.variantName}>{product.variantName}</span>
+        )}
         {isNewProduct(product) && (
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide font-pop bg-amber-500 text-white flex-shrink-0">
             New

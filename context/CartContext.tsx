@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 import { v4 as uuidv4 } from 'uuid'
 import type { CartItem } from '@/types'
 import { trackActivity } from '@/lib/supabaseClient'
-import { OPTION_KEY } from '@/lib/productOptions'
+import { OPTION_KEY, resolveVariantSelection } from '@/lib/productOptions'
 
 /** Selection identity regardless of key order. */
 const selectionKey = (s: Record<string, string>) =>
@@ -78,15 +78,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItems(prev => {
       const item = prev.find(i => i.id === id)
       if (!item) return prev
-      const selection = { ...item.selection, [key]: value }
+      let selection = { ...item.selection, [key]: value }
       if (!value) delete selection[key]
-      const updated = {
-        ...item,
-        selection,
-        ...(key === OPTION_KEY && item.options
-          ? { unitPrice: item.options.prices.find(o => o.key === value)?.price ?? null }
-          : {}),
+      let unitPrice = item.unitPrice
+      if (item.options?.variants) {
+        // Variants: the picks select one row of the price list and its price.
+        const resolved = resolveVariantSelection(item.options, selection)
+        selection = resolved.selection
+        unitPrice = resolved.unitPrice
+      } else if (key === OPTION_KEY && item.options) {
+        unitPrice = item.options.prices.find(o => o.key === value)?.price ?? null
       }
+      const updated = { ...item, selection, unitPrice }
       // Now identical to another line (same product + same picks)? Merge into that one.
       const twin = prev.find(i => i.id !== id && i.productCode === item.productCode && selectionKey(i.selection) === selectionKey(selection))
       if (twin) {

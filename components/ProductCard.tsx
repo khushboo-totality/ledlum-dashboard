@@ -83,6 +83,9 @@ export default function ProductCard({ product, index, onClick, onEdit, onDelete,
 
       <div className="px-4 pb-3 pt-3">
         <div className="truncate text-sm font-extrabold tracking-wide text-foreground font-bai">{displayCode}</div>
+        {product.variantName && (
+          <div className="truncate text-[11px] font-semibold text-primary font-pop" title={product.variantName}>{product.variantName}</div>
+        )}
         <div className="mt-1 flex items-center justify-between gap-2">
           <div className="min-w-0 truncate text-xs text-gray-text font-pop">{product.Category}</div>
           <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray text-gray-text transition-colors group-hover:bg-primary group-hover:text-white">

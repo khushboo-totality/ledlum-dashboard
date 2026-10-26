@@ -1,22 +1,23 @@
 // Server-only. Reads/writes `ledlum_products` + the `ledlum_product_zone`
 // join table. Depends on lib/services/zones.ts only for slug <-> row-id
-// resolution — never queries `ledlum_zone` directly itself.
+// resolution â€” never queries `ledlum_zone` directly itself.
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getZoneRowIdBySlug, getZoneSlugsByRowIds } from '@/lib/services/zones'
-import type { Product, ProductFormData, Stats } from '@/types'
+import type { Product, ProductFormData, ProductVariant, Stats } from '@/types'
 import { toDisplayAttributes } from '@/lib/productColumns'
+import { expandVariants } from '@/lib/productOptions'
 
 const TABLE = 'ledlum_products'
 const JOIN_TABLE = 'ledlum_product_zone'
 
-// Supabase/PostgREST caps unpaginated responses at 1000 rows — this table
+// Supabase/PostgREST caps unpaginated responses at 1000 rows â€” this table
 // has 1600+ products, so every query that isn't already bounded by a small
 // .in() id list must page through with .range() or it silently truncates.
 const PAGE_SIZE = 1000
 const ID_CHUNK_SIZE = 300
 
-// ── In-memory cache for the two aggregate endpoints that otherwise do a
-// full table scan on every request (getCategories, getProductTaxonomy) —
+// â”€â”€ In-memory cache for the two aggregate endpoints that otherwise do a
+// full table scan on every request (getCategories, getProductTaxonomy) â€”
 // that's what made a hard-refresh of the catalog slow. Scoped to this
 // module instance (works within one warm Fluid Compute instance; a cold
 // start or another instance just recomputes). Invalidated on any write so
@@ -83,32 +84,99 @@ export interface ProductRow {
   extra_specs: Record<string, string> | null
 }
 
-// ── Prices (ledlum_product_prices: model -> { "D.P.": "Rs.960.00", … }) ──
+// â”€â”€ Prices (ledlum_product_prices: model -> { "D.P.": "Rs.960.00", â€¦ }) â”€â”€
 const PRICE_TABLE = 'ledlum_product_prices'
 export const DP_KEY = 'D.P.'
 
 /** "Rs.1,565.00" -> 1565; null if not a number. */
 function parsePrice(v: unknown): number | null {
-  const n = Number(String(v ?? '').replace(/rs\.?|₹|,|\s/gi, ''))
+  const n = Number(String(v ?? '').replace(/rs\.?|â‚¹|,|\s/gi, ''))
   return String(v ?? '').trim() !== '' && Number.isFinite(n) ? n : null
 }
 
-export async function getPricesForModels(models: string[]): Promise<Map<string, Record<string, number>>> {
-  const result = new Map<string, Record<string, number>>()
+export interface Pricing {
+  prices: Record<string, number>
+  /** Variants of a model the price list repeats on several rows (see types ProductVariant). */
+  variants: ProductVariant[] | null
+}
+
+// The variants column comes from migrations/009_product_variants.sql. Until
+// it's run, prices still load (without variants) instead of failing.
+let variantsColumnMissing = false
+const MISSING_COLUMN = '42703'
+const VARIANTS_MIGRATION_HINT = 'Run supabase/migrations/009_product_variants.sql in the Supabase SQL editor to enable product variants'
+
+function parseVariants(raw: unknown): ProductVariant[] | null {
+  if (!Array.isArray(raw)) return null
+  const out: ProductVariant[] = []
+  for (const v of raw) {
+    if (!v || typeof v !== 'object') continue
+    const { attributes, prices } = v as { attributes?: unknown; prices?: unknown }
+    const attrs: Record<string, string> = {}
+    for (const [k, val] of Object.entries((attributes ?? {}) as Record<string, unknown>)) if (typeof val === 'string') attrs[k] = val
+    const ps: Record<string, number> = {}
+    for (const [k, val] of Object.entries((prices ?? {}) as Record<string, unknown>)) {
+      const n = parsePrice(val)
+      if (n !== null) ps[k] = n
+    }
+    out.push({ attributes: attrs, prices: ps })
+  }
+  return out.length > 1 ? out : null
+}
+
+/** Prices + variants per model, from the private price table. */
+export async function getPricingForModels(models: string[]): Promise<Map<string, Pricing>> {
+  const result = new Map<string, Pricing>()
   const unique = Array.from(new Set(models.filter(Boolean)))
   for (const batch of chunk(unique, ID_CHUNK_SIZE)) {
-    const { data, error } = await supabaseAdmin.from(PRICE_TABLE).select('model, prices').in('model', batch)
-    if (error) throw new Error(`Failed to load prices: ${error.message}`)
-    for (const r of (data ?? []) as { model: string; prices: Record<string, unknown> | null }[]) {
+    let rows: { model: string; prices: Record<string, unknown> | null; variants?: unknown }[] = []
+    if (!variantsColumnMissing) {
+      const { data, error } = await supabaseAdmin.from(PRICE_TABLE).select('model, prices, variants').in('model', batch)
+      if (error?.code === MISSING_COLUMN) variantsColumnMissing = true
+      else if (error) throw new Error(`Failed to load prices: ${error.message}`)
+      else rows = (data ?? []) as typeof rows
+    }
+    if (variantsColumnMissing) {
+      const { data, error } = await supabaseAdmin.from(PRICE_TABLE).select('model, prices').in('model', batch)
+      if (error) throw new Error(`Failed to load prices: ${error.message}`)
+      rows = (data ?? []) as typeof rows
+    }
+    for (const r of rows) {
       const parsed: Record<string, number> = {}
       for (const [k, v] of Object.entries(r.prices ?? {})) {
         const n = parsePrice(v)
         if (n !== null) parsed[k] = n
       }
-      result.set(r.model, parsed)
+      result.set(r.model, { prices: parsed, variants: parseVariants(r.variants) })
     }
   }
   return result
+}
+
+export async function getPricesForModels(models: string[]): Promise<Map<string, Record<string, number>>> {
+  const pricing = await getPricingForModels(models)
+  return new Map(Array.from(pricing, ([model, p]) => [model, p.prices]))
+}
+
+/** Replaces (or clears, with null) a model's variants. Prices are stored like
+ * the prices column ("Rs.1790.00") so both read the same way. */
+async function setProductVariants(model: string, variants: ProductVariant[] | null): Promise<void> {
+  const value = variants && variants.length > 1
+    ? variants.map(v => ({
+        attributes: v.attributes,
+        prices: Object.fromEntries(Object.entries(v.prices).map(([k, n]) => [k, `Rs.${n.toFixed(2)}`])),
+      }))
+    : null
+  const now = new Date().toISOString()
+  const { data: existing, error } = await supabaseAdmin.from(PRICE_TABLE).select('model').eq('model', model).maybeSingle()
+  if (error) throw new Error(`Failed to load price: ${error.message}`)
+  const { error: saveErr } = existing
+    ? await supabaseAdmin.from(PRICE_TABLE).update({ variants: value, updated_at: now }).eq('model', model)
+    : value
+      ? await supabaseAdmin.from(PRICE_TABLE).insert({ model, prices: {}, variants: value, updated_at: now })
+      : { error: null }
+  if (saveErr?.code === MISSING_COLUMN) throw new Error(VARIANTS_MIGRATION_HINT)
+  if (saveErr) throw new Error(`Failed to save variants: ${saveErr.message}`)
 }
 
 /** Sets (or clears, with null) a product's D.P. in ledlum_product_prices,
@@ -141,12 +209,13 @@ async function setProductPrices(model: string, changes: Record<string, number | 
   }
 }
 
-function mapRowToProduct(row: ProductRow, zoneSlugs: string[], prices?: Record<string, number>): Product {
+function mapRowToProduct(row: ProductRow, zoneSlugs: string[], pricing?: Pricing): Product {
+  const prices = pricing?.prices
   return {
     id: String(row.id),
-    // Legacy fields — keep the old UI/product-taxonomy contract working.
+    // Legacy fields â€” keep the old UI/product-taxonomy contract working.
     // `group_name` is the well-populated, human-meaningful grouping (e.g.
-    // "POLE LIGHT FIXTURES") — the raw `category` column is a sparse legacy
+    // "POLE LIGHT FIXTURES") â€” the raw `category` column is a sparse legacy
     // duplicate of it on ~58% of rows, so it's only a fallback here.
     Codes: row.model ?? '',
     Category: row.group_name ?? row.category ?? 'Uncategorized',
@@ -185,6 +254,7 @@ function mapRowToProduct(row: ProductRow, zoneSlugs: string[], prices?: Record<s
     website: row.website,
     product_type: row.product_type,
     prices: prices && Object.keys(prices).length ? prices : null,
+    variants: pricing?.variants ?? null,
     extra_specs: row.extra_specs && Object.keys(row.extra_specs).length ? row.extra_specs : null,
     attributes: toDisplayAttributes(row as unknown as Record<string, unknown>),
   }
@@ -251,7 +321,7 @@ interface ZoneProductRow {
 
 /**
  * Legacy rows from ledlum_zone_products whose `codes` don't match any
- * ledlum_products.model — i.e. never made it into the real catalog. Shown
+ * ledlum_products.model â€” i.e. never made it into the real catalog. Shown
  * read-only in the zone dashboard so zones aren't silently empty; excluded
  * once a matching real product (and thus a ledlum_product_zone link) exists,
  * to avoid showing the same item twice.
@@ -301,7 +371,7 @@ async function getUnmatchedZoneProducts(
 export interface ProductFilters {
   zone?: string
   search?: string
-  /** Zone-dashboard "Category" filter — actually filters on group_name. */
+  /** Zone-dashboard "Category" filter â€” actually filters on group_name. */
   category?: string
   source?: string
   /** Product-type dashboard's 3-level hierarchy: collection -> group_name -> category. */
@@ -310,6 +380,9 @@ export interface ProductFilters {
   productType?: string
   /** Only products flagged ledlum_products.product_type = 'new'. */
   newOnly?: boolean
+  /** false = one entry per product; by default a product with variants is
+   * listed once per variant (lib/productOptions.ts expandVariants). */
+  expandVariants?: boolean
   /** When set, paginates the result instead of returning everything. */
   limit?: number
   offset?: number
@@ -334,7 +407,7 @@ export async function listProducts(filters?: ProductFilters): Promise<ProductPag
   const rows: ProductRow[] = []
   let dbHasMore = false
   // Skip the real-product query entirely when zone-filtered with zero links
-  // — still fall through to append unmatched legacy rows below.
+  // â€” still fall through to append unmatched legacy rows below.
   if (!filters?.zone || (productIdFilter && productIdFilter.length > 0)) {
     const applyFilters = (q: any) => {
       if (filters?.category) q = q.eq('group_name', filters.category)
@@ -360,10 +433,10 @@ export async function listProducts(filters?: ProductFilters): Promise<ProductPag
       dbHasMore = pageRows.length > limit
       rows.push(...pageRows.slice(0, limit))
     } else {
-      // Zone-filtered (small id-list) or unpaginated — fetch the full set;
+      // Zone-filtered (small id-list) or unpaginated â€” fetch the full set;
       // zone-filtered results are cheap (tens of rows), and callers that
       // don't pass `limit` (getStats/getCategories/sync) need everything.
-      // Bounded by an .in() id list (<=1000 rows possible per id) → chunk it.
+      // Bounded by an .in() id list (<=1000 rows possible per id) â†’ chunk it.
       const idChunks = productIdFilter ? chunk(productIdFilter, ID_CHUNK_SIZE) : [null]
       for (const idBatch of idChunks) {
         const pageRows = await selectAllPages<ProductRow>((from, to) => {
@@ -379,9 +452,11 @@ export async function listProducts(filters?: ProductFilters): Promise<ProductPag
 
   const [zoneMap, priceMap] = await Promise.all([
     getZoneSlugsForProductIds(rows.map(r => r.id)),
-    getPricesForModels(rows.map(r => r.model ?? '')),
+    getPricingForModels(rows.map(r => r.model ?? '')),
   ])
   let products = rows.map(r => mapRowToProduct(r, zoneMap.get(r.id) ?? [], priceMap.get(r.model ?? '')))
+  // Every row of a repeated model (finish / accessory …) gets its own card.
+  if (filters?.expandVariants !== false) products = products.flatMap(expandVariants)
 
   if (filters?.zone) {
     const legacy = await getUnmatchedZoneProducts(filters.zone, { search: filters.search, category: filters.category })
@@ -407,12 +482,12 @@ export async function getProductById(id: string): Promise<Product | null> {
   const row = data as ProductRow
   const [zoneMap, priceMap] = await Promise.all([
     getZoneSlugsForProductIds([numId]),
-    getPricesForModels([row.model ?? '']),
+    getPricingForModels([row.model ?? '']),
   ])
   return mapRowToProduct(row, zoneMap.get(numId) ?? [], priceMap.get(row.model ?? ''))
 }
 
-/** Client extra_specs → trimmed { label: value } with blanks dropped, capped;
+/** Client extra_specs â†’ trimmed { label: value } with blanks dropped, capped;
  * null when nothing is left (so the column stays empty, not {}). */
 function cleanExtraSpecs(raw: unknown): Record<string, string> | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
@@ -467,10 +542,11 @@ export async function createProduct(data: ProductFormData): Promise<Product> {
   await setProductZones(row.id, zoneSlugs)
   if (data.dp !== undefined && row.model) await setProductDp(row.model, data.dp)
   if (data.prices && Object.keys(data.prices).length && row.model) await setProductPrices(row.model, data.prices)
+  if (data.variants !== undefined && row.model) await setProductVariants(row.model, data.variants)
 
   const [zoneMap, priceMap] = await Promise.all([
     getZoneSlugsForProductIds([row.id]),
-    getPricesForModels([row.model ?? '']),
+    getPricingForModels([row.model ?? '']),
   ])
   invalidateAggregateCaches()
   return mapRowToProduct(row as ProductRow, zoneMap.get(row.id) ?? [], priceMap.get(row.model ?? ''))
@@ -505,7 +581,7 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
   if (data.sub_category !== undefined) updateRow.category = data.sub_category || null
   if (data.is_track !== undefined) updateRow.is_track = data.is_track
 
-  // Prices are keyed by model — remember the old one in case it's being renamed.
+  // Prices are keyed by model â€” remember the old one in case it's being renamed.
   let oldModel: string | null = null
   if (data.Codes !== undefined) {
     const { data: before } = await supabaseAdmin.from(TABLE).select('model').eq('id', numId).maybeSingle()
@@ -535,10 +611,11 @@ export async function updateProduct(id: string, data: Partial<ProductFormData>):
   }
   if (data.dp !== undefined && row.model) await setProductDp(row.model, data.dp)
   if (data.prices && Object.keys(data.prices).length && row.model) await setProductPrices(row.model, data.prices)
+  if (data.variants !== undefined && row.model) await setProductVariants(row.model, data.variants)
 
   const [zoneMap, priceMap] = await Promise.all([
     getZoneSlugsForProductIds([numId]),
-    getPricesForModels([row.model ?? '']),
+    getPricingForModels([row.model ?? '']),
   ])
   invalidateAggregateCaches()
   return mapRowToProduct(row, zoneMap.get(numId) ?? [], priceMap.get(row.model ?? ''))
@@ -587,11 +664,11 @@ export async function getCategories(zone?: string): Promise<string[]> {
   return result
 }
 
-// ── Families (ledlum_products.family — free text grouping variants) ──
+// â”€â”€ Families (ledlum_products.family â€” free text grouping variants) â”€â”€
 export interface FamilyOption { name: string; count: number }
 const familiesCache: { data: FamilyOption[] | null; expires: number } = { data: null, expires: 0 }
 
-/** Every distinct family with its product count, A→Z (natural order). */
+/** Every distinct family with its product count, Aâ†’Z (natural order). */
 export async function listFamilies(): Promise<FamilyOption[]> {
   if (familiesCache.data && familiesCache.expires > Date.now()) return familiesCache.data
   const rows = await selectAllPages<{ family: string | null }>((from, to) =>
@@ -689,7 +766,7 @@ export async function getStats(zone?: string): Promise<Stats> {
   }
 }
 
-/** Kept for API-contract compatibility (see app/api/products/sync/route.ts) — no UI trigger anymore. */
+/** Kept for API-contract compatibility (see app/api/products/sync/route.ts) â€” no UI trigger anymore. */
 export async function syncExternal(records: Partial<ProductFormData>[], zone?: string): Promise<{ added: number; updated: number }> {
   let added = 0, updated = 0
   for (const raw of records) {

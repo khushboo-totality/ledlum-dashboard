@@ -48,6 +48,9 @@ const SELECTION_TO_COLUMN: Record<string, string> = {
   models: 'model',
 }
 
+/** True when a selection key fills a BOQ column (else it's only shown as a note). */
+export const isColumnSelectionKey = (key: string) => key in SELECTION_TO_COLUMN
+
 export function applySelection(attributes: Record<string, string>, selection: Record<string, string>): Record<string, string> {
   const out = { ...attributes }
   for (const [k, v] of Object.entries(selection)) {

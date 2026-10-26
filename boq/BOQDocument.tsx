@@ -25,6 +25,8 @@ export type BoqRow = {
   mrp: number; // list rate per unit, of the price `priceKey`
   /** Which price `mrp` is — "D.P." or the picked option (RF+BLE, DT8 …); one column each. */
   priceKey?: string;
+  /** Picks without a column of their own (accessory, type, feature …), shown under the product. */
+  note?: string;
   disc: number; // percent
   net: number; // net rate per unit
   total: number; // line amount
@@ -598,6 +600,7 @@ function SchedulePage({ meta, entries, first, brought, carried, isLastSchedule, 
                           {v.code}
                           {v.option && <span style={{ color: C.goldDark }}> · {v.option}</span>}
                         </p>
+                        {e.row.note && <p className="mt-0.5 text-[10px] leading-snug" style={{ color: C.text }}>{e.row.note}</p>}
                       </td>
                       <td className={`${td} ${NUM}`}>{dash(v.watt)}</td>
                       <td className={`${td} ${NUM}`}>{dash(v.beam)}</td>

@@ -5,16 +5,17 @@
 // trusting a client preview) and writes only rows that create, update or delete.
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import {
-  chunk, createProduct, updateProduct, deleteProduct, getPricesForModels, getZoneSlugsForProductIds,
+  chunk, createProduct, updateProduct, deleteProduct, getPricingForModels, getZoneSlugsForProductIds,
   DP_KEY, type ProductRow,
 } from '@/lib/services/products'
+import { variantLabel } from '@/lib/productOptions'
 import { listCategories, createCategory, CategoryError, type Category } from '@/lib/services/categories'
 import { listZones } from '@/lib/services/zones'
 import {
   FIELDS, PRICE_PREFIX, SPEC_PREFIX, isClear, isPlaceholder, splitFieldList,
   type BulkChange, type BulkInputRow, type BulkOptions, type BulkPlanItem,
 } from '@/lib/bulkColumns'
-import type { ProductFormData } from '@/types'
+import type { ProductFormData, ProductVariant } from '@/types'
 
 const TABLE = 'ledlum_products'
 const ID_CHUNK = 300
@@ -24,6 +25,7 @@ interface Existing {
   row: ProductRow
   zones: string[]
   prices: Record<string, number>
+  variants: ProductVariant[] | null
 }
 
 interface PlannedRow {
@@ -87,15 +89,16 @@ async function loadExisting(rows: BulkInputRow[]): Promise<{ byId: Map<number, E
   }
 
   const productRows = Array.from(found.values())
-  const [zoneMap, priceMap] = await Promise.all([
+  const [zoneMap, pricing] = await Promise.all([
     getZoneSlugsForProductIds(productRows.map(r => r.id)),
-    getPricesForModels(productRows.map(r => r.model ?? '')),
+    getPricingForModels(productRows.map(r => r.model ?? '')),
   ])
 
   const byId = new Map<number, Existing>()
   const byModel = new Map<string, Existing[]>()
   for (const r of productRows) {
-    const e: Existing = { row: r, zones: zoneMap.get(r.id) ?? [], prices: priceMap.get(r.model ?? '') ?? {} }
+    const p = pricing.get(r.model ?? '')
+    const e: Existing = { row: r, zones: zoneMap.get(r.id) ?? [], prices: p?.prices ?? {}, variants: p?.variants ?? null }
     byId.set(r.id, e)
     const m = r.model?.trim()
     if (m) byModel.set(m, [...(byModel.get(m) ?? []), e])
@@ -269,15 +272,62 @@ function planRow(input: BulkInputRow, existing: Existing | null, lookups: Lookup
   return { item: withNotes({ status: 'update', changes }), patch, newCategory }
 }
 
+// ── Variants: a model the sheet lists on several rows ──────────────────
+//
+// The price lists repeat a model once per finish / accessory / frame, each
+// row with its own price. All rows are kept: the product takes the first
+// row's values (with every row's body colours), and each row becomes a
+// variant holding the columns that differ plus its prices — the partner's
+// picks in the quote cart select one (lib/productOptions.ts).
+
+/** Columns never stored per variant (identity, grouping, prices). The
+ * description is kept per variant so each one's catalogue card shows its own. */
+const NOT_VARIANT_ATTR = new Set(['id', 'action', 'model', 'group_name', 'family', 'website', 'zones', 'dp'])
+const cell = (r: BulkInputRow, k: string) => (isPlaceholder(r.data[k] ?? '') ? '' : (r.data[k] ?? '').trim())
+
+function buildVariants(group: BulkInputRow[]): ProductVariant[] {
+  const unique = group.filter((r, i) => group.findIndex(o => JSON.stringify(o.data) === JSON.stringify(r.data)) === i)
+  const keys = Array.from(new Set(unique.flatMap(r => Object.keys(r.data))))
+    .filter(k => !NOT_VARIANT_ATTR.has(k) && !k.startsWith(PRICE_PREFIX) && new Set(unique.map(r => cell(r, k))).size > 1)
+  return unique.map(r => {
+    const prices: Record<string, number> = {}
+    const dp = parsePrice(cell(r, 'dp'))
+    if (dp !== null) prices[DP_KEY] = dp
+    for (const k of Object.keys(r.data)) {
+      if (!k.startsWith(PRICE_PREFIX)) continue
+      const n = parsePrice(cell(r, k))
+      if (n !== null) prices[k.slice(PRICE_PREFIX.length)] = n
+    }
+    return { attributes: Object.fromEntries(keys.map(k => [k, cell(r, k)])), prices }
+  })
+}
+
+/** The group's first row, with the body colours of all its rows (so the catalogue lists every finish). */
+function mergedFirstRow(group: BulkInputRow[]): BulkInputRow {
+  const first = group[0]
+  const colours = Array.from(new Set(group.flatMap(r => splitFieldList('body_colors', cell(r, 'body_colors')))))
+  return colours.length ? { ...first, data: { ...first.data, body_colors: colours.join(' / ') } } : first
+}
+
+const variantsKey = (vs: ProductVariant[] | null | undefined) =>
+  JSON.stringify((vs ?? []).map(v => [
+    Object.entries(v.attributes).sort(([a], [b]) => a.localeCompare(b)),
+    Object.entries(v.prices).sort(([a], [b]) => a.localeCompare(b)),
+  ]))
+
+function describeVariants(vs: ProductVariant[] | null | undefined): string {
+  if (!vs?.length) return ''
+  return vs.map(v => `${variantLabel(vs, v)}: ${Object.entries(v.prices).map(([k, n]) => `${k} ${n}`).join(', ') || 'no price'}`).join('  ·  ')
+}
+
 export async function planBulk(rows: BulkInputRow[], options: BulkOptions): Promise<PlannedRow[]> {
   const [{ byId, byModel }, lookups] = await Promise.all([loadExisting(rows), loadLookups()])
   // Which row already claimed a product (or a new model) — catches the same
   // product listed twice in one upload.
   const claimed = new Map<string, BulkInputRow>()
 
-  // Products listed more than once with different values: every copy is an
-  // error (not just the later ones), so neither version is written until the
-  // sheet keeps just one.
+  // Products listed more than once with different values become one product
+  // with a variant per row — planned on the group's first row.
   const rowKey = (r: BulkInputRow) => {
     const id = Number(r.data.id?.trim())
     if (r.data.id?.trim()) return byId.has(id) ? `id:${id}` : null
@@ -291,6 +341,11 @@ export async function planBulk(rows: BulkInputRow[], options: BulkOptions): Prom
     if (k) versions.set(k, (versions.get(k) ?? new Set()).add(JSON.stringify(r.data)))
   }
   const conflicting = new Set(Array.from(versions).filter(([, v]) => v.size > 1).map(([k]) => k))
+  const groups = new Map<string, BulkInputRow[]>()
+  for (const r of rows) {
+    const k = rowKey(r)
+    if (k && conflicting.has(k)) groups.set(k, [...(groups.get(k) ?? []), r])
+  }
 
   return rows.map(input => {
     const { data } = input
@@ -326,12 +381,9 @@ export async function planBulk(rows: BulkInputRow[], options: BulkOptions): Prom
 
     const key = existing ? `id:${existing.row.id}` : `new:${model.toLowerCase()}`
     const where = (r: BulkInputRow) => `${r.sheet === input.sheet ? '' : `sheet "${r.sheet}", `}row ${r.line}`
-    if (conflicting.has(key)) {
-      const others = rows.filter(r => r !== input && rowKey(r) === key)
-      const differs = Array.from(new Set(others.flatMap(o => Object.keys({ ...o.data, ...data })
-        .filter(k => (o.data[k] ?? '') !== (data[k] ?? '')))))
-        .map(k => FIELDS.find(f => f.key === k)?.label ?? k.replace(/^(spec|price):/, ''))
-      return fail(`Also listed in ${others.map(where).join(', ')} with a different ${differs.join(', ')} — keep one row, then re-upload`)
+    const group = groups.get(key)
+    if (group && group[0] !== input) {
+      return { item: { ...base, status: 'unchanged', warnings: [`Variant of ${where(group[0])} — saved with it`] } }
     }
     const seen = claimed.get(key)
     // Price lists repeat some products verbatim — harmless, just skip the copy.
@@ -345,7 +397,23 @@ export async function planBulk(rows: BulkInputRow[], options: BulkOptions): Prom
     if (action === 'create' && existing) return fail(`"${model}" already exists (id ${existing.row.id}) — clear the action column to update it`)
     if (action === 'update' && !existing) return fail(`Can't update "${model}" — no such product`)
 
-    const planned = planRow(input, existing, lookups, options)
+    const planned = planRow(group ? mergedFirstRow(group) : input, existing, lookups, options)
+    if (group && planned.item.status !== 'error') {
+      const next = buildVariants(group)
+      planned.item.mergedRows = group.slice(1).map(r => r.row)
+      if (variantsKey(next) !== variantsKey(existing?.variants)) {
+        const differs = Array.from(new Set(next.flatMap(v => Object.keys(v.attributes))))
+          .filter(k => k !== 'hero_description')
+          .map(k => FIELDS.find(f => f.key === k)?.label ?? k.replace(/^spec:/, ''))
+        planned.item.changes = [...(planned.item.changes ?? []), {
+          field: `Variants (${next.length}, by ${differs.join(', ') || 'price only'})`,
+          from: describeVariants(existing?.variants),
+          to: describeVariants(next),
+        }]
+        planned.patch = { ...planned.patch, variants: next }
+        if (planned.item.status === 'unchanged') planned.item.status = 'update'
+      }
+    }
     // A renamed model clashing with another product is allowed (models aren't
     // unique in the DB) but almost always a mistake.
     const newModel = planned.patch?.Codes

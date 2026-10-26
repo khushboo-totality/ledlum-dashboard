@@ -10,7 +10,7 @@ import { useZones } from '@/context/ZonesContext'
 import { linePricing, formatInr } from '@/lib/cartSpecs'
 import { authFetch, trackActivity } from '@/lib/supabaseClient'
 import { downloadBoq, EMPTY_BOQ_DETAILS, type BoqProjectDetails as BoqDetails } from '@/lib/boq'
-import { OPTION_KEY, missingChoices, priceKeyOf } from '@/lib/productOptions'
+import { OPTION_KEY, availableValues, matchVariant, missingChoices, priceKeyOf } from '@/lib/productOptions'
 import type { CartItem } from '@/types'
 
 const PAN_PATTERN = /^[A-Z]{5}[0-9]{4}[A-Z]$/
@@ -39,7 +39,21 @@ function CartLine({ item, context }: { item: CartItem; context: string }) {
   ]
   const otherPicks = Object.entries(item.selection).filter(([k, v]) => v && !isOptionKey(k))
   const p = linePricing(item)
-  const needsPrice = (item.options?.prices.length ?? 0) > 1 && !item.selection[OPTION_KEY]
+  const variants = item.options?.variants
+  const matched = variants ? matchVariant(variants, item.options!.specs, item.selection) : null
+  const needsPrice = p.unit === null && (!!variants || (item.options?.prices.length ?? 0) > 1)
+  // Price shown on an option tile: exact once the variant is known, else "from" the lowest.
+  const tilePrice = (key: string, fallback: number) =>
+    !variants ? formatInr(fallback)
+      : matched ? (matched.prices[key] != null ? formatInr(matched.prices[key]) : 'n/a')
+        : `from ${formatInr(fallback)}`
+  // Picking a value no variant has with the other picks: drop those picks first.
+  const pickVariantValue = (key: string, value: string, available: boolean) => {
+    if (!available && item.options) {
+      for (const c of item.options.specs) if (c.variantAttr !== undefined && c.key !== key && item.selection[c.key]) updateSelection(item.id, c.key, '')
+    }
+    updateSelection(item.id, key, value)
+  }
 
   const tile = (sel: boolean) =>
     `rounded-lg border transition-all ${sel
@@ -109,7 +123,7 @@ function CartLine({ item, context }: { item: CartItem; context: string }) {
                       <button key={o.key} onClick={() => updateSelection(item.id, OPTION_KEY, o.key)}
                         className={`${tile(sel)} relative px-3 py-2 text-left`}>
                         <span className="block text-xs font-bold font-bai">{o.key}</span>
-                        <span className="block text-[11px] font-pop text-gray-text">{formatInr(o.price)}</span>
+                        <span className="block text-[11px] font-pop text-gray-text">{tilePrice(o.key, o.price)}</span>
                         {sel && (
                           <svg className="absolute right-2 top-2 text-primary" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
                         )}
@@ -125,12 +139,22 @@ function CartLine({ item, context }: { item: CartItem; context: string }) {
                   {c.label} {!item.selection[c.key] && <span className="text-amber-700">*</span>}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {c.values.map(v => (
-                    <button key={v} onClick={() => updateSelection(item.id, c.key, v)}
-                      className={`${tile(item.selection[c.key] === v)} px-2.5 py-1.5 text-xs font-semibold font-bai`}>
-                      {v}
-                    </button>
-                  ))}
+                  {(() => {
+                    const avail = variants && c.variantAttr !== undefined
+                      ? availableValues(variants, item.options!.specs, item.selection, c)
+                      : null
+                    return c.values.map(v => {
+                      const ok = !avail || avail.has(v)
+                      return (
+                        <button key={v}
+                          onClick={() => (c.variantAttr !== undefined ? pickVariantValue(c.key, v, ok) : updateSelection(item.id, c.key, v))}
+                          title={ok ? undefined : 'Not available with the other choices — picking it clears them'}
+                          className={`${tile(item.selection[c.key] === v)} px-2.5 py-1.5 text-xs font-semibold font-bai ${ok ? '' : 'opacity-40'}`}>
+                          {v}
+                        </button>
+                      )
+                    })
+                  })()}
                 </div>
               </div>
             ))}

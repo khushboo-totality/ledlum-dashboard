@@ -95,7 +95,7 @@ export default function BulkUploadManager() {
     try {
       let products: Product[] = []
       if (kind === 'all') {
-        const res = await fetch('/api/products', { cache: 'no-store' })
+        const res = await fetch('/api/products?variants=0', { cache: 'no-store' })
         if (!res.ok) throw new Error('Could not load products')
         products = (await res.json()).data ?? []
       }
@@ -176,21 +176,33 @@ export default function BulkUploadManager() {
 
   // ── Step 3: apply in chunks ──
   const handleApply = async () => {
-    const toApply = new Set(plan.filter(i => ACTIONABLE.has(i.status)).map(i => i.row))
-    const batchRows = rows.filter(r => toApply.has(r.row))
+    // Each actionable row travels with its variant rows (same request), so the
+    // server sees the whole repeated model when it re-plans.
+    const byRow = new Map(rows.map(r => [r.row, r]))
+    const units = plan.filter(i => ACTIONABLE.has(i.status))
+      .map(i => [i.row, ...(i.mergedRows ?? [])].map(n => byRow.get(n)).filter((r): r is BulkInputRow => !!r))
+    const batchRows = units.flat()
     const deletes = count(plan, 'delete')
     const newCats = Array.from(new Set(plan.flatMap(i => (i.warnings ?? []).filter(w => w.startsWith('New category')))))
-    if (batchRows.length === 0) return
+    if (units.length === 0) return
     if (!confirm(
-      `Apply ${batchRows.length} change${batchRows.length === 1 ? '' : 's'}?` +
+      `Apply ${units.length} change${units.length === 1 ? '' : 's'}?` +
       (newCats.length ? `\n\n${newCats.length} new categor${newCats.length === 1 ? 'y' : 'ies'} will be created.` : '') +
       (deletes ? `\n\n${deletes} product${deletes === 1 ? '' : 's'} will be permanently deleted.` : '')
     )) return
 
+    // Pack whole units into requests of about BULK_APPLY_CHUNK rows.
+    const batches: BulkInputRow[][] = []
+    for (const unit of units) {
+      const last = batches[batches.length - 1]
+      if (last && last.length + unit.length <= BULK_APPLY_CHUNK) last.push(...unit)
+      else batches.push([...unit])
+    }
+
     setPhase('applying'); setError(''); setProgress({ done: 0, total: batchRows.length })
     const out: BulkPlanItem[] = []
-    for (let i = 0; i < batchRows.length; i += BULK_APPLY_CHUNK) {
-      const batch = batchRows.slice(i, i + BULK_APPLY_CHUNK)
+    let done = 0
+    for (const batch of batches) {
       try {
         const res = await authFetch('/api/products/bulk', {
           method: 'POST',
@@ -207,7 +219,8 @@ export default function BulkUploadManager() {
           row: r.row, sheet: r.sheet, line: r.line, status: 'error' as const, model: r.data.model ?? '', errors: [msg],
         })))
       }
-      setProgress({ done: Math.min(i + batch.length, batchRows.length), total: batchRows.length })
+      done += batch.length
+      setProgress({ done, total: batchRows.length })
     }
     setResults(out); setFilter('all'); setShown(PAGE); setPhase('done')
   }

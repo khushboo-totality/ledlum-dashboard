@@ -13,13 +13,15 @@ export async function GET(req: NextRequest) {
   const groupName   = searchParams.get('groupName') || undefined
   const productType = searchParams.get('productType') || undefined
   const newOnly     = searchParams.get('newOnly') === '1'
+  // variants=0 → one entry per product (e.g. the bulk export) instead of one per variant
+  const expandVariants = searchParams.get('variants') !== '0'
   const limitParam  = searchParams.get('limit')
   const offsetParam = searchParams.get('offset')
   const limit  = limitParam  ? Number(limitParam)  : undefined
   const offset = offsetParam ? Number(offsetParam) : undefined
 
   const { items, hasMore } = await listProducts({
-    zone, search, category, source, collection, groupName, productType, newOnly, limit, offset,
+    zone, search, category, source, collection, groupName, productType, newOnly, expandVariants, limit, offset,
   })
   return NextResponse.json({ data: items, hasMore })
 }

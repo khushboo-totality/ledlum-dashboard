@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { Product, ProductFormData } from '@/types'
+import { expandVariants } from '@/lib/productOptions'
 
 const PAGE_SIZE = 20
 
@@ -127,7 +128,7 @@ export function useProducts(zone?: string, options?: UseProductsOptions) {
     })
     if (!res.ok) throw new Error(await res.text())
     const product = await res.json()
-    setProducts(prev => [product, ...prev])
+    setProducts(prev => [...expandVariants(product), ...prev])
     offsetRef.current += 1
     setCategories(prev => prev.includes(product.Category) ? prev : [...prev, product.Category])
     return product
@@ -141,14 +142,24 @@ export function useProducts(zone?: string, options?: UseProductsOptions) {
     })
     if (!res.ok) throw new Error(await res.text())
     const updated = await res.json()
-    setProducts(prev => prev.map(p => p.id === id ? updated : p))
+    // Replace the product — or all of its variant cards — with its fresh card(s).
+    const fresh = expandVariants(updated)
+    setProducts(prev => {
+      let placed = false
+      return prev.flatMap(p => {
+        if (p.id !== id && p.variantOf !== id) return [p]
+        if (placed) return []
+        placed = true
+        return fresh
+      })
+    })
     return updated
   }, [])
 
   const deleteProduct = useCallback(async (id: string) => {
     const res = await fetch(`/api/products/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error(await res.text())
-    setProducts(prev => prev.filter(p => p.id !== id))
+    setProducts(prev => prev.filter(p => p.id !== id && p.variantOf !== id))
     offsetRef.current = Math.max(0, offsetRef.current - 1)
   }, [])
 

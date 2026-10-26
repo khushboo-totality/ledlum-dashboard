@@ -62,6 +62,29 @@ export interface Product {
   /** DB columns (minus internal ones) as display strings, in table order —
    * see lib/productColumns.ts. Drives the PDF columns and their titles. */
   attributes?: Record<string, string>
+  /** One per Excel row when the model is listed on several rows (finish /
+   * accessory / frame …) — each with its own price. From ledlum_product_prices.variants. */
+  variants?: ProductVariant[] | null
+  /** Set on a catalogue card that shows one variant (one Excel row) of a
+   * product: the real product's id — edits and deletes go to it. */
+  variantOf?: string
+  /** That variant's name, e.g. "Black Chrome / Chrome / Bronze · Honeycomb Louvre". */
+  variantName?: string
+  /** Cart selection that identifies the variant (so quotes are priced at it). */
+  variantSelection?: Record<string, string>
+}
+
+/**
+ * One row of a model that the price list repeats with different values —
+ * e.g. LLF-286 without accessory ₹1,690 / with "Honeycomb Louvre" ₹1,790.
+ * The partner's picks decide which variant (and so which price) applies.
+ */
+export interface ProductVariant {
+  /** Only the columns that differ between the variants: bulk-row keys
+   * ("body_colors", "product_type", "dimensions" …, or "spec:Accessory") → this row's value. */
+  attributes: Record<string, string>
+  /** This row's prices, e.g. { "D.P.": 1790 } or { "D.P. (2 Mtr)": 805, "D.P. (3 Mtr)": 1185 }. */
+  prices: Record<string, number>
 }
 
 // ── Rich product detail ──────────────────────────────────────────────
@@ -121,9 +144,20 @@ export interface CartProductSpecs {
 /** A price the partner can pick for a quote line (D.P., RF+BLE, DT8 …). */
 export interface CartPriceOption { key: string; price: number }
 /** A spec column with several values; one must be picked ("3000K" from "3000K/4000K"). */
-export interface CartSpecChoice { key: string; label: string; values: string[] }
+export interface CartSpecChoice {
+  key: string
+  label: string
+  values: string[]
+  /** Set on choices that pick a variant: the variant attribute it reads ("" = the "Version" choice). */
+  variantAttr?: string
+}
 /** Choices snapshotted at add-to-cart time, picked in the cart — see lib/productOptions.ts. */
-export interface CartItemOptions { prices: CartPriceOption[]; specs: CartSpecChoice[] }
+export interface CartItemOptions {
+  prices: CartPriceOption[]
+  specs: CartSpecChoice[]
+  /** The product's variants, when it has several — the picks select one and its price. */
+  variants?: ProductVariant[]
+}
 
 export interface CartItem {
   id: string
@@ -183,6 +217,8 @@ export interface ProductFormData {
   is_track?: boolean
   /** Price keys to set in ledlum_product_prices (e.g. "D.P. (2 Mtr)"); null removes a key. */
   prices?: Record<string, number | null>
+  /** Replaces the product's variants; null clears them, undefined leaves them unchanged. */
+  variants?: ProductVariant[] | null
 }
 
 export interface Stats {

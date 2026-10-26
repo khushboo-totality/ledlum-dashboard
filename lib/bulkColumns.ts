@@ -147,6 +147,9 @@ export interface BulkPlanItem {
   changes?: BulkChange[]
   errors?: string[]
   warnings?: string[]
+  /** The other rows of a repeated model, saved as its variants with this row —
+   * they must be sent in the same apply request. */
+  mergedRows?: number[]
 }
 
 export const MAX_BULK_ROWS = 5000

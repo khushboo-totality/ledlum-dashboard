@@ -1,7 +1,7 @@
-﻿// Server-side: parsing + email rendering of partner quote lines — shared by
+// Server-side: parsing + email rendering of partner quote lines — shared by
 // /api/quote-request (Send quote) and /api/boq-download (BOQ download alert).
 import { EMAIL, escapeHtml } from '@/lib/email'
-import { getPricesForModels } from '@/lib/services/products'
+import { getPricingForModels } from '@/lib/services/products'
 import { priceColumns, priceKeyOf, selectedUnitPrice } from '@/lib/productOptions'
 
 export const MAX_ITEMS = 200
@@ -94,8 +94,8 @@ export function parseItems(raw: unknown): QuoteItem[] | null {
  * On lookup failure the lines stay unpriced rather than failing the request. */
 export async function applyPrices(items: QuoteItem[], tag: string): Promise<void> {
   try {
-    const prices = await getPricesForModels(items.map(i => i.productCode))
-    for (const item of items) item.unitPrice = selectedUnitPrice({ prices: prices.get(item.productCode) ?? null }, item.selection)
+    const pricing = await getPricingForModels(items.map(i => i.productCode))
+    for (const item of items) item.unitPrice = selectedUnitPrice(pricing.get(item.productCode) ?? { prices: null }, item.selection)
   } catch (err) {
     console.error(`[${tag}] price lookup failed:`, err)
   }
